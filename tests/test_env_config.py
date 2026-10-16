@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import textwrap
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -34,6 +34,14 @@ _ENV_KEYS = (
 def _clear(monkeypatch) -> None:
     for key in _ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
+
+
+def _posix_path(path) -> PurePosixPath:
+    """Compare container paths without a Windows drive letter."""
+    text = path.as_posix()
+    if len(text) >= 2 and text[1] == ":":
+        text = text[2:]
+    return PurePosixPath(text)
 
 
 def _caddy_script() -> str:
@@ -73,8 +81,8 @@ def test_env_only_config(tmp_path, monkeypatch):
     assert config.audit_max_bytes == 4096
     assert config.update_inventory_after_change is False
     assert config.log_level == "WARNING"
-    assert config.audit_path == Path("/app/logs/audit.jsonl")
-    assert config.log_path == Path("/app/logs/app.log")
+    assert _posix_path(config.audit_path) == PurePosixPath("/app/logs/audit.jsonl")
+    assert _posix_path(config.log_path) == PurePosixPath("/app/logs/app.log")
 
 
 def test_env_overrides_yaml_and_empty_strings_are_selective(tmp_path, monkeypatch):
@@ -121,7 +129,10 @@ def test_missing_file_without_url_names_both_options(tmp_path, monkeypatch):
         load_config()
 
 
-@pytest.mark.skipif(shutil.which("sh") is None, reason="The Caddy entrypoint is a POSIX shell script.")
+@pytest.mark.skipif(
+    os.name == "nt" or shutil.which("sh") is None,
+    reason="The Caddy entrypoint is a Linux container script and needs sh.",
+)
 def test_deploy_caddy_entrypoint_modes(tmp_path):
     script = _caddy_script()
     bindir = tmp_path / "bin"

@@ -1,11 +1,19 @@
 """Deployment files stay generic and keep the portal as a single process."""
 
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
 from app.config import load_config
+
+
+def _posix_path(path) -> PurePosixPath:
+    """Compare container paths without a Windows drive letter."""
+    text = path.as_posix()
+    if len(text) >= 2 and text[1] == ":":
+        text = text[2:]
+    return PurePosixPath(text)
 
 
 def test_deployment_examples_have_no_secrets(tmp_path, monkeypatch):
@@ -28,7 +36,8 @@ def test_deployment_examples_have_no_secrets(tmp_path, monkeypatch):
     config = load_config(destination)
     assert config.host == "0.0.0.0"
     assert config.cookie_secure is True
-    assert config.audit_path == Path("/app/logs/audit.jsonl")
+    assert _posix_path(config.audit_path) == PurePosixPath("/app/logs/audit.jsonl")
+    assert _posix_path(config.log_path) == PurePosixPath("/app/logs/app.log")
     assert config.jamf_url == "https://jamf.example.org:8443"
 
 
