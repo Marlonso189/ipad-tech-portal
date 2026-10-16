@@ -100,6 +100,10 @@ def test_location_user_and_asset_tag_are_audited(portal):
         json.loads(line)
         for line in portal["config"].audit_path.read_text(encoding="utf-8").splitlines()
     ]
+    inventory_lines = [line for line in lines if line["action"] == "update_inventory"]
+    assert len(inventory_lines) == 1
+    assert inventory_lines[0]["after"]["path"] == "modern"
+    lines = [line for line in lines if line["action"] != "update_inventory"]
     actions = [line["action"] for line in lines]
     assert actions == ["update_location", "update_user", "update_asset_tag"]
     assert lines[0]["before"]["department"] == "Mathematics"

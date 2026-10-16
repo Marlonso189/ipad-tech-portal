@@ -240,6 +240,26 @@ class JamfClient:
         )
         return payload if isinstance(payload, dict) else {}
 
+    def classic_update_inventory(self, token: str, device_id: str) -> None:
+        """Classic API fallback for Update Inventory, addressed by Jamf's numeric device id."""
+        if not str(device_id).isdigit():
+            raise JamfError("This iPad has no numeric Jamf device id, so the Classic API cannot be used.")
+        path = f"/JSSResource/mobiledevicecommands/command/UpdateInventory/id/{device_id}"
+        try:
+            response = self._client.request(
+                "POST",
+                path,
+                headers={"Accept": "application/xml", "Authorization": f"Bearer {token}"},
+            )
+        except httpx.TimeoutException as exc:
+            raise JamfError("Jamf Pro did not respond in time.") from exc
+        except httpx.HTTPError as exc:
+            raise JamfError("Could not reach Jamf Pro.") from exc
+        if response.status_code in (401, 403):
+            raise JamfAccessError(response.status_code, "Update Inventory (Classic API)")
+        if response.status_code not in (200, 201, 204):
+            raise JamfHTTPError(response.status_code, _classic_error_message(response))
+
     def _pages(self, path: str, token: str, action: str) -> list[dict[str, Any]]:
         page = 0
         collected: list[dict[str, Any]] = []
@@ -437,3 +457,18 @@ def _error_message(response: httpx.Response) -> str:
             if payload.get(key):
                 return str(payload[key])[:300]
     return f"Jamf returned HTTP {response.status_code}."
+
+
+def _classic_error_message(response: httpx.Response) -> str:
+    """Classic API errors are HTML/XML pages; pull out readable text."""
+    import re
+
+    text = response.text or ""
+    match = re.search(r"<p>(.*?)</p>", text, re.S | re.I)
+    if match:
+        text = match.group(1)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = " ".join(text.split())
+    if not text:
+        return f"Jamf returned HTTP {response.status_code}."
+    return text[:300]

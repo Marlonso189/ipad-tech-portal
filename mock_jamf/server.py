@@ -55,6 +55,10 @@ class Store:
     requests: list[tuple[str, str]] = field(default_factory=list)
     failures: dict[tuple[str, str], int] = field(default_factory=dict)
     classic_enabled: bool = True
+    # Simulate Jamf Pro 11.30 rejecting v2 MDM commands: map commandType -> (status, description).
+    mdm_failures: dict[str, tuple[int, str]] = field(default_factory=dict)
+    # Force the Classic UpdateInventory command to fail: (status, html/xml body).
+    classic_command_failure: tuple[int, str] | None = None
 
 
 def build_store() -> Store:
@@ -332,6 +336,10 @@ def create_mock_app() -> FastAPI:
             return JSONResponse(status_code=400, content={"httpStatus": 400, "errors": [{"description": "Unknown command"}]})
         if needed not in user["privileges"]:
             return _status(403)
+        forced_mdm = request.app.state.store.mdm_failures.get(command_type)
+        if forced_mdm is not None:
+            code, description = forced_mdm
+            return JSONResponse(status_code=code, content={"httpStatus": code, "errors": [{"code": "UNKNOWN", "description": description}]})
         clients = body.get("clientData") or []
         management_id = str(clients[0].get("managementId") or "") if clients else ""
         device = next((item for item in request.app.state.store.devices.values() if item.management_id == management_id), None)
@@ -354,6 +362,37 @@ def create_mock_app() -> FastAPI:
             "username": user["username"],
         })
         return JSONResponse(status_code=201, content={"id": command_id, "commandUuid": command_id})
+
+    @app.post("/JSSResource/mobiledevicecommands/command/UpdateInventory/id/{device_id}")
+    def classic_update_inventory(device_id: str, request: Request) -> Response:
+        store: Store = request.app.state.store
+        if not store.classic_enabled:
+            return _status(404)
+        user = _require_user(request)
+        if isinstance(user, JSONResponse):
+            return user
+        if "Send Mobile Device Update Inventory Command" not in user["privileges"]:
+            return _status(403)
+        if store.classic_command_failure is not None:
+            code, text = store.classic_command_failure
+            return Response(status_code=code, content=f"<html><body><p>{text}</p></body></html>", media_type="text/html")
+        device = store.devices.get(device_id)
+        if device is None or not device_id.isdigit():
+            return Response(status_code=404, content="<html><body><p>The server has not found anything matching the request URI</p></body></html>", media_type="text/html")
+        command_id = str(len(store.commands) + 1)
+        store.commands.append({
+            "id": command_id,
+            "commandType": "DEVICE_INFORMATION",
+            "managementId": device.management_id,
+            "username": user["username"],
+            "api": "classic",
+        })
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?><mobile_device_command>'
+            f"<command>UpdateInventory</command><mobile_devices><mobile_device><id>{device_id}</id>"
+            "<status/></mobile_device></mobile_devices></mobile_device_command>"
+        )
+        return Response(status_code=201, content=xml, media_type="application/xml")
 
     return app
 

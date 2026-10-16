@@ -340,17 +340,23 @@ class Portal:
             self._record(session, device, feature, before, None, "error", exc.message)
             raise exc
         label = FEATURE_LABELS[feature]
+        detail = ""
         try:
-            payload = self._call(
-                session,
-                label,
-                lambda token: self.jamf.send_mdm(token, device["managementId"], command, label),
-            )
+            if feature == "update_inventory":
+                payload, path = self._send_inventory(session, device)
+                planned_after = {**planned_after, "path": path}
+                detail = _inventory_detail(path)
+            else:
+                payload = self._call(
+                    session,
+                    label,
+                    lambda token: self.jamf.send_mdm(token, device["managementId"], command, label),
+                )
         except AppError as exc:
             self._record(session, device, feature, before, None, _result_for(exc), exc.message)
             raise
         command_id = str(payload.get("id") or payload.get("commandUuid") or "")
-        self._record(session, device, feature, before, planned_after, "success", "")
+        self._record(session, device, feature, before, planned_after, "success", detail)
         try:
             device = self._load(session, device["id"])
         except AppError:
@@ -391,9 +397,34 @@ class Portal:
             return "skipped", "Update Inventory was not queued because the iPad is not managed."
         if not has_feature(session.privileges, session.privilege_set, "update_inventory"):
             return "skipped", permission_message("update_inventory")
+        before = {"managed": device["managed"]}
+        try:
+            _, path = self._send_inventory(session, device)
+        except AppError as exc:
+            self._record(session, device, "update_inventory", before, None, _result_for(exc), exc.message)
+            return "failed", f"Update Inventory was not queued. {exc.message}"
+        self._record(
+            session,
+            device,
+            "update_inventory",
+            before,
+            {"command": "DEVICE_INFORMATION", "path": path},
+            "success",
+            _inventory_detail(path),
+        )
+        return "queued", "Update Inventory was queued."
+
+    def _send_inventory(self, session: Session, device: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        """Queue Update Inventory: modern API first, Classic API if Jamf rejects it.
+
+        Jamf Pro 11.30 sometimes answers the v2 DEVICE_INFORMATION command with
+        "Unable to perform MDM operation"; the Classic UpdateInventory command,
+        addressed by the numeric device id, still works in that case.
+        Returns the payload and which path succeeded ("modern" or "classic").
+        """
         label = FEATURE_LABELS["update_inventory"]
         try:
-            self._call(
+            payload = self._call(
                 session,
                 label,
                 lambda token: self.jamf.send_mdm(
@@ -403,9 +434,31 @@ class Portal:
                     label,
                 ),
             )
-        except AppError as exc:
-            return "failed", f"Update Inventory was not queued. {exc.message}"
-        return "queued", "Update Inventory was queued."
+            return payload, "modern"
+        except AppError as modern:
+            if modern.code == "session_expired":
+                raise
+            modern_error = modern
+        device_id = str(device.get("id") or "")
+        if not device_id.isdigit():
+            raise AppError(
+                modern_error.status,
+                modern_error.code,
+                f"Jamf API: {modern_error.message} Classic API fallback unavailable: no numeric device id.",
+            )
+        try:
+            self._call(session, label, lambda token: self.jamf.classic_update_inventory(token, device_id))
+        except AppError as classic:
+            if classic.code == "session_expired":
+                raise
+            status = 403 if modern_error.status == 403 and classic.status == 403 else 502
+            code = "permission" if status == 403 else "jamf"
+            raise AppError(
+                status,
+                code,
+                f"Jamf API: {modern_error.message} Classic API: {classic.message}",
+            ) from classic
+        return {}, "classic"
 
     def _visible_groups(self, session: Session) -> list[dict[str, str]]:
         groups = self._cached(
@@ -658,6 +711,12 @@ def _user_view(device: dict[str, Any]) -> dict[str, str]:
         "fullName": device["fullName"],
         "email": device["email"],
     }
+
+
+def _inventory_detail(path: str) -> str:
+    if path == "classic":
+        return "Queued via Classic API fallback (Jamf API v2 MDM command failed)."
+    return "Queued via Jamf API v2 MDM command."
 
 
 def _result_for(exc: AppError) -> str:
