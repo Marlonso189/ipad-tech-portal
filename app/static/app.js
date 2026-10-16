@@ -435,6 +435,7 @@ function openWipe(device) {
   document.querySelector("#wipe-serial").textContent = device.serialNumber;
   const input = document.querySelector("#wipe-input");
   input.value = "";
+  document.querySelector('input[name="wipe-type"][value="full"]').checked = true;
   document.querySelector("#wipe-ok").disabled = true;
   wipeDialog.showModal();
   input.focus();
@@ -445,13 +446,15 @@ async function onWipeSubmit(event) {
   const button = document.querySelector("#wipe-ok");
   button.disabled = true;
   try {
+    const checked = document.querySelector('input[name="wipe-type"]:checked');
+    const wipeType = checked ? checked.value : "full";
     const data = await api(`/api/devices/${wipeDialog.dataset.deviceId}/commands/erase`, {
       method: "POST",
-      body: { confirmSerial: document.querySelector("#wipe-input").value },
+      body: { confirmSerial: document.querySelector("#wipe-input").value, wipeType },
     });
     wipeDialog.close();
     if (data.device) renderDevice(data.device);
-    setNotice("Erase Device was queued.");
+    setNotice(wipeType === "return_to_service" ? "Erase Device with Return to Service was queued." : "Erase Device was queued.");
   } catch (error) {
     setNotice(error.message, "error");
   } finally {

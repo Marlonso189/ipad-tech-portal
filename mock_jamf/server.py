@@ -59,6 +59,8 @@ class Store:
     mdm_failures: dict[str, tuple[int, str]] = field(default_factory=dict)
     # Force the Classic UpdateInventory command to fail: (status, html/xml body).
     classic_command_failure: tuple[int, str] | None = None
+    # Whether the device's PreStage has Return to Service + a Wi-Fi profile configured.
+    return_to_service_ready: bool = True
 
 
 def build_store() -> Store:
@@ -362,6 +364,33 @@ def create_mock_app() -> FastAPI:
             "username": user["username"],
         })
         return JSONResponse(status_code=201, content={"id": command_id, "commandUuid": command_id})
+
+    @app.post("/api/v2/mobile-devices/{device_id}/erase")
+    async def erase_device(device_id: str, request: Request) -> JSONResponse:
+        blocked = _need(request, "Send Mobile Device Remote Wipe Command")
+        if blocked:
+            return blocked
+        store: Store = request.app.state.store
+        device = store.devices.get(device_id)
+        if device is None:
+            return _status(404)
+        body = await request.json()
+        rts = bool(body.get("returnToService"))
+        if rts and not store.return_to_service_ready:
+            return JSONResponse(
+                status_code=400,
+                content={"httpStatus": 400, "errors": [{"description": "Return to service requirements not met."}]},
+            )
+        command_id = f"erase-{len(store.commands) + 1}"
+        store.commands.append({
+            "id": command_id,
+            "commandType": "ERASE_DEVICE",
+            "managementId": device.management_id,
+            "username": _require_user(request)["username"],
+            "returnToService": rts,
+            "api": "mobile-devices-erase",
+        })
+        return JSONResponse({"commandUuid": command_id, "deviceId": device_id})
 
     @app.post("/JSSResource/mobiledevicecommands/command/UpdateInventory/id/{device_id}")
     def classic_update_inventory(device_id: str, request: Request) -> Response:

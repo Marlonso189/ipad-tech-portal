@@ -240,6 +240,18 @@ class JamfClient:
         )
         return payload if isinstance(payload, dict) else {}
 
+    def erase_return_to_service(self, token: str, device_id: str, action: str) -> dict[str, Any]:
+        """Wipe with Return to Service using the PreStage enrollment's Wi-Fi profile."""
+        payload = self._send(
+            "POST",
+            f"/api/v2/mobile-devices/{_path_id(device_id)}/erase",
+            action=action,
+            token=token,
+            json_body={"returnToService": True},
+            ok_status=(200, 201),
+        )
+        return payload if isinstance(payload, dict) else {}
+
     def classic_update_inventory(self, token: str, device_id: str) -> None:
         """Classic API fallback for Update Inventory, addressed by Jamf's numeric device id."""
         if not str(device_id).isdigit():

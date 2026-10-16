@@ -6,7 +6,7 @@ import hmac
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -72,6 +72,7 @@ class LostModeBody(BaseModel):
 class WipeBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmSerial: str = ""
+    wipeType: Literal["full", "return_to_service"] = "full"
 
 
 def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str | None = None) -> FastAPI:
@@ -289,7 +290,7 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
 
     @app.post("/api/devices/{device_id}/commands/erase")
     def post_erase(device_id: str, body: WipeBody, request: Request) -> dict[str, Any]:
-        return request.app.state.portal.erase(_require(request), device_id, body.confirmSerial)
+        return request.app.state.portal.erase(_require(request), device_id, body.confirmSerial, body.wipeType)
 
     @app.get("/")
     def index() -> FileResponse:

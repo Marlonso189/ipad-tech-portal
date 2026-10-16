@@ -94,6 +94,13 @@
     <form id="wipe-form">
       <h2>Erase this iPad</h2>
       <p>This queues Erase Device. The iPad is wiped when it next checks in. The portal cannot undo it.</p>
+      <fieldset class="wipe-type">
+        <legend>Wipe type</legend>
+        <label class="radio"><input type="radio" name="wipe-type" value="full" checked> Full wipe
+          <span class="hint">Erases everything; someone must set up the iPad and join Wi-Fi by hand.</span></label>
+        <label class="radio"><input type="radio" name="wipe-type" value="return_to_service"> Wipe with Return to Service
+          <span class="hint">Erases, then rejoins Wi-Fi and re-enrolls automatically using the PreStage enrollment's Wi-Fi profile.</span></label>
+      </fieldset>
       <p>Type the serial number <strong id="wipe-serial"></strong> to continue.</p>
       <label>Serial number
         <input id="wipe-input" autocomplete="off" spellcheck="false" maxlength="64">

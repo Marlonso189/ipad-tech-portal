@@ -274,3 +274,7 @@ footer {
   .mast-inner, .identity, .search { flex-direction: column; align-items: stretch; }
   h1 { font-size: 1.5rem; }
 }
+
+fieldset.wipe-type { border: 1px solid var(--muted); border-radius: 6px; padding: 0.5rem 0.75rem; margin: 0 0 0.75rem; }
+fieldset.wipe-type label.radio { display: block; margin: 0.35rem 0; }
+fieldset.wipe-type label.radio .hint { display: block; font-size: 0.85em; margin-left: 1.5rem; }

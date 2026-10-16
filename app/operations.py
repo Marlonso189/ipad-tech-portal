@@ -25,6 +25,9 @@ SESSION_EXPIRED = "Your Jamf session is no longer valid. Sign in again."
 TIMED_OUT = "Your session timed out. Sign in again."
 
 
+WIPE_TYPES = ("full", "return_to_service")
+
+
 class AppError(Exception):
     def __init__(self, status: int, code: str, message: str) -> None:
         super().__init__(message)
@@ -296,13 +299,32 @@ class Portal:
     def disable_lost_mode(self, session: Session, device_id: str) -> dict[str, Any]:
         return self._command(session, device_id, "disable_lost_mode", {"commandType": "DISABLE_LOST_MODE"})
 
-    def erase(self, session: Session, device_id: str, confirm_serial: str) -> dict[str, Any]:
+    def erase(self, session: Session, device_id: str, confirm_serial: str, wipe_type: str = "full") -> dict[str, Any]:
+        if wipe_type not in WIPE_TYPES:
+            raise AppError(400, "invalid", "Choose Full wipe or Wipe with Return to Service.")
+        send = None
+        if wipe_type == "return_to_service":
+            # Same as Jamf's "Return to Service during device reset" option: Jamf uses the
+            # Wi-Fi profile selected in the device's PreStage enrollment. (The raw
+            # /api/v2/mdm/commands returnToService block would need the Wi-Fi profile
+            # inline as base64 wifiProfileData instead.)
+            label = FEATURE_LABELS["wipe"]
+
+            def send(session_: Session, device: dict[str, Any]) -> dict[str, Any]:
+                return self._call(
+                    session_,
+                    label,
+                    lambda token: self.jamf.erase_return_to_service(token, device["id"], label),
+                )
+
         return self._command(
             session,
             device_id,
             "wipe",
             {"commandType": "ERASE_DEVICE"},
             confirm_serial=confirm_serial,
+            after={"command": "ERASE_DEVICE", "wipeType": wipe_type},
+            send=send,
         )
 
     def _command(
@@ -314,6 +336,7 @@ class Portal:
         *,
         confirm_serial: str | None = None,
         after: dict[str, Any] | None = None,
+        send: Callable[[Session, dict[str, Any]], dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self._require_change(session, feature, device_id)
         try:
@@ -342,7 +365,9 @@ class Portal:
         label = FEATURE_LABELS[feature]
         detail = ""
         try:
-            if feature == "update_inventory":
+            if send is not None:
+                payload = send(session, device)
+            elif feature == "update_inventory":
                 payload, path = self._send_inventory(session, device)
                 planned_after = {**planned_after, "path": path}
                 detail = _inventory_detail(path)
@@ -353,7 +378,8 @@ class Portal:
                     lambda token: self.jamf.send_mdm(token, device["managementId"], command, label),
                 )
         except AppError as exc:
-            self._record(session, device, feature, before, None, _result_for(exc), exc.message)
+            failed_after = {"wipeType": planned_after["wipeType"]} if "wipeType" in planned_after else None
+            self._record(session, device, feature, before, failed_after, _result_for(exc), exc.message)
             raise
         command_id = str(payload.get("id") or payload.get("commandUuid") or "")
         self._record(session, device, feature, before, planned_after, "success", detail)

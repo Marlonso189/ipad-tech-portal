@@ -47,6 +47,7 @@ The Pro API is used everywhere it covers the job. The Classic API is used for on
 | Fallback membership check | `GET /api/v2/mobile-device-groups/static-group-membership/{groupId}?filter=mobileDeviceId=="{id}"` |
 | Add or remove one device | `PATCH /api/v2/mobile-device-groups/static-groups/{id}` with `{ "assignments": [{ "mobileDeviceId": "...", "selected": true }] }` (`selected: false` removes). Falls back to the v1 path on 404. |
 | MDM commands | `POST /api/v2/mdm/commands` (Update Inventory falls back to Classic `POST /JSSResource/mobiledevicecommands/command/UpdateInventory/id/{id}`) |
+| Wipe with Return to Service | `POST /api/v2/mobile-devices/{id}/erase` `{"returnToService": true}` (uses the PreStage Wi-Fi profile) |
 
 MDM `commandData.commandType` values:
 
