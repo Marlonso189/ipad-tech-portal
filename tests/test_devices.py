@@ -114,7 +114,7 @@ def test_location_user_and_asset_tag_are_audited(portal):
     blob = portal["config"].audit_path.read_text(encoding="utf-8")
     assert "demo-tech" not in blob
     assert "Bearer" not in blob
-    inventory = [item for item in portal["mock"].state.store.commands if item["commandType"] == "UPDATE_INVENTORY"]
+    inventory = [item for item in portal["mock"].state.store.commands if item["commandType"] == "DEVICE_INFORMATION"]
     assert len(inventory) == 1
 
 

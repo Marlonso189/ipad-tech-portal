@@ -85,7 +85,7 @@ def test_mdm_commands_and_lost_mode(portal):
     kinds = [item["commandType"] for item in portal["mock"].state.store.commands]
     assert kinds == [
         "RESTART_DEVICE",
-        "UPDATE_INVENTORY",
+        "DEVICE_INFORMATION",
         "CLEAR_PASSCODE",
         "ENABLE_LOST_MODE",
         "DISABLE_LOST_MODE",

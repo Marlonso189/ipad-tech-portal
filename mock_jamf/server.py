@@ -322,7 +322,7 @@ def create_mock_app() -> FastAPI:
         command_type = str(command.get("commandType") or "")
         needed = {
             "RESTART_DEVICE": "Send Mobile Device Restart Device Command",
-            "UPDATE_INVENTORY": "Send Mobile Device Update Inventory Command",
+            "DEVICE_INFORMATION": "Send Mobile Device Update Inventory Command",
             "CLEAR_PASSCODE": "Send Mobile Device Clear Passcode Command",
             "ENABLE_LOST_MODE": "Send Mobile Device Enable Lost Mode Command",
             "DISABLE_LOST_MODE": "Send Mobile Device Disable Lost Mode Command",

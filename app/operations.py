@@ -267,7 +267,7 @@ class Portal:
         return self._command(session, device_id, "restart", {"commandType": "RESTART_DEVICE"})
 
     def update_inventory(self, session: Session, device_id: str) -> dict[str, Any]:
-        return self._command(session, device_id, "update_inventory", {"commandType": "UPDATE_INVENTORY"})
+        return self._command(session, device_id, "update_inventory", {"commandType": "DEVICE_INFORMATION"})
 
     def clear_passcode(self, session: Session, device_id: str) -> dict[str, Any]:
         return self._command(session, device_id, "clear_passcode", {"commandType": "CLEAR_PASSCODE"})
@@ -399,7 +399,7 @@ class Portal:
                 lambda token: self.jamf.send_mdm(
                     token,
                     device["managementId"],
-                    {"commandType": "UPDATE_INVENTORY"},
+                    {"commandType": "DEVICE_INFORMATION"},
                     label,
                 ),
             )
