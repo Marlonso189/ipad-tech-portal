@@ -1,0 +1,35 @@
+# Demo overlay. The mock is not part of a production stack.
+#   docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
+
+services:
+  mock:
+    image: ipad-tech-portal:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "mock_jamf"]
+    environment:
+      MOCK_JAMF_HOST: "0.0.0.0"
+      MOCK_JAMF_PORT: "8742"
+    expose:
+      - "8742"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8742/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  portal:
+    environment:
+      ITP_JAMF_URL: http://mock:8742
+    depends_on:
+      mock:
+        condition: service_healthy

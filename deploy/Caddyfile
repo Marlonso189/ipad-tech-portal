@@ -1,0 +1,8 @@
+{
+	admin off
+}
+
+{$PORTAL_HOST:ipad-tech.example.org} {
+	tls /certs/cert.pem /certs/key.pem
+	reverse_proxy portal:8741
+}

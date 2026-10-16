@@ -1,0 +1,36 @@
+# Container config. Copy to config.yaml beside docker-compose.yml and edit it.
+# Compose mounts that file read-only at /app/config.yaml.
+# Do not put passwords, API tokens, or other secrets in this file.
+# ITP_JAMF_URL, when set on the container, replaces jamf.url.
+
+jamf:
+  url: "https://jamf.example.org:8443"
+  verify_tls: true
+  timeout_seconds: 30
+
+server:
+  # Listen on every interface inside the container so the reverse proxy can connect.
+  # Do not publish this port on the host. Caddy publishes 443.
+  host: "0.0.0.0"
+  port: 8741
+  cookie_secure: true
+  cookie_name: "itp_session"
+
+session:
+  idle_timeout_minutes: 15
+
+groups:
+  allowlist: []
+  name_prefix: "Tech-"
+
+audit:
+  path: "/app/logs/audit.jsonl"
+  retention_days: 90
+  max_bytes: 10485760
+
+inventory:
+  update_inventory_after_change: true
+
+logging:
+  path: "/app/logs/app.log"
+  level: "INFO"

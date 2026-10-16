@@ -1,0 +1,52 @@
+# iPad Tech Portal configuration.
+# Copy this file to config.yaml (next to the application) and edit it.
+# Paths below are relative to this file's directory.
+# Do not put passwords, API tokens, or other secrets in this file.
+
+jamf:
+  # Jamf Pro base URL. No trailing path. Cloud or on-prem.
+  url: "https://jamf.example.org:8443"
+  # Verify the Jamf TLS certificate. Set false only for a lab server
+  # with a private certificate you cannot trust.
+  verify_tls: true
+  timeout_seconds: 30
+
+server:
+  # Bind on the server itself. IIS reverse-proxies HTTPS to this port.
+  host: "127.0.0.1"
+  port: 8741
+  # Set true when the site is served over HTTPS (normal IIS install).
+  # Set false only for a local HTTP demo. The session cookie is otherwise
+  # marked Secure and a browser will not send it over plain HTTP.
+  cookie_secure: true
+  cookie_name: "itp_session"
+
+session:
+  # Idle time before the in-memory session and its Jamf token are dropped.
+  idle_timeout_minutes: 15
+
+groups:
+  # If allowlist is non-empty, only these static group names are shown
+  # (case-insensitive exact match). The prefix is ignored in that case.
+  allowlist: []
+  # Used only when allowlist is empty. Static groups whose names start
+  # with this prefix are shown. If both are empty, no groups are offered.
+  name_prefix: "Tech-"
+
+audit:
+  path: "logs/audit.jsonl"
+  retention_days: 90
+  # Rotate the active file once it reaches this size, and also on the
+  # first write of a new UTC day. Rotated files older than retention_days
+  # are deleted. The active file is append-only.
+  max_bytes: 10485760
+
+inventory:
+  # Offer an Update Inventory command after location, user, and asset-tag
+  # changes so smart groups can re-evaluate. The tech can still clear the
+  # checkbox for a single save.
+  update_inventory_after_change: true
+
+logging:
+  path: "logs/app.log"
+  level: "INFO"

@@ -1,0 +1,41 @@
+name: ipad-tech-portal
+
+services:
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ipad-tech-portal:local
+    restart: unless-stopped
+    environment:
+      ITP_CONFIG: /app/config.yaml
+      ITP_JAMF_URL: ${ITP_JAMF_URL:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - portal-logs:/app/logs
+    expose:
+      - "8741"
+    # One process only. Sessions and Jamf tokens live in memory in this container.
+    # Do not scale this service.
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PORTAL_HOST: ${PORTAL_HOST:-ipad-tech.example.org}
+    volumes:
+      - ${CADDYFILE:-./deploy/Caddyfile.internal}:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      portal:
+        condition: service_healthy
+
+volumes:
+  portal-logs:
+  caddy-data:
+  caddy-config:

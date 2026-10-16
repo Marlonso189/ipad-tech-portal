@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>iPad Tech Portal</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="mast">
+    <div class="mast-inner">
+      <div>
+        <p class="eyebrow">Jamf Pro</p>
+        <h1>iPad Tech Portal</h1>
+      </div>
+      <div class="mast-actions" id="session-bar" hidden>
+        <p id="who"></p>
+        <button type="button" class="secondary light" id="logout">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <p id="audit-warning" class="notice error" hidden></p>
+    <section id="login-view" class="panel narrow">
+      <h2>Sign in</h2>
+      <p class="lede">Use your Jamf Pro username and password. The password is exchanged for a token and is not stored.</p>
+      <p id="login-alert" class="notice error" hidden></p>
+      <form id="login-form">
+        <label>Jamf username
+          <input id="username" name="username" autocomplete="username" required maxlength="256">
+        </label>
+        <label>Password
+          <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+        </label>
+        <button type="submit" class="primary" id="login-button">Sign in</button>
+      </form>
+    </section>
+
+    <section id="app-view" class="panel" hidden>
+      <form id="search-form" class="search">
+        <label class="grow">Serial number or asset tag
+          <input id="query" name="q" autocomplete="off" maxlength="100" required placeholder="Exact serial or asset tag">
+        </label>
+        <button type="submit" class="primary" id="search-button">Look up</button>
+      </form>
+      <p id="notice" class="notice" hidden></p>
+      <div id="results">
+        <section class="card empty">
+          <h2>Look up an iPad</h2>
+          <p>Enter a serial number or an asset tag. The match is exact, so a shared asset tag may return more than one iPad.</p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p id="foot">Internal use. Changes are written to the audit log and run with your own Jamf privileges.</p>
+  </footer>
+
+  <dialog id="confirm-dialog">
+    <form id="confirm-form">
+      <h2 id="confirm-title">Confirm</h2>
+      <p id="confirm-body"></p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="confirm-cancel">Cancel</button>
+        <button type="submit" class="primary" id="confirm-ok">Continue</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="lost-dialog">
+    <form id="lost-form">
+      <h2>Enable Lost Mode</h2>
+      <p>The iPad locks and shows this message the next time it checks in. Lost Mode stays on until someone disables it.</p>
+      <label>Lock screen message
+        <textarea id="lost-message" maxlength="256" rows="3"></textarea>
+      </label>
+      <label>Phone number
+        <input id="lost-phone" maxlength="40" autocomplete="off">
+      </label>
+      <label>Footnote
+        <input id="lost-footnote" maxlength="128" autocomplete="off">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="lost-cancel">Cancel</button>
+        <button type="submit" class="primary" id="lost-ok">Queue Lost Mode</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="wipe-dialog">
+    <form id="wipe-form">
+      <h2>Erase this iPad</h2>
+      <p>This queues Erase Device. The iPad is wiped when it next checks in. The portal cannot undo it.</p>
+      <p>Type the serial number <strong id="wipe-serial"></strong> to continue.</p>
+      <label>Serial number
+        <input id="wipe-input" autocomplete="off" spellcheck="false" maxlength="64">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="wipe-cancel">Cancel</button>
+        <button type="submit" class="danger" id="wipe-ok" disabled>Erase this iPad</button>
+      </div>
+    </form>
+  </dialog>
+
+  <noscript><p class="notice error">This portal needs JavaScript enabled in the browser.</p></noscript>
+  <script src="/static/app.js"></script>
+</body>
+</html>
