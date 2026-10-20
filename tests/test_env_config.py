@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Environment variables override config.yaml and can replace it."""
 
 from pathlib import Path, PurePosixPath

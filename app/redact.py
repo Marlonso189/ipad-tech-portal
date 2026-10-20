@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Strip passwords, tokens, and authorization material from logs."""
 
 from __future__ import annotations

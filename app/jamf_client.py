@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Jamf Pro HTTP client. The browser never calls Jamf itself."""
 
 from __future__ import annotations

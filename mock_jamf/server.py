@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """A small Jamf Pro stand-in for local demos and tests.
 
 Demo accounts exist only in this process:

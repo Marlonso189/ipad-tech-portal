@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Normalize a Jamf Pro base URL. Nothing here is stored."""
 
 from __future__ import annotations

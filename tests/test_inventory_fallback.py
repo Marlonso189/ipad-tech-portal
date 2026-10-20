@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Update Inventory: Jamf API v2 first, Classic API fallback, both errors surfaced."""
 
 import json

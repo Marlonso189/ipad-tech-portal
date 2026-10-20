@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Build the Windows desktop folder and, when Inno Setup 6 is installed, the installer.
 # Run from any directory:  powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 param(

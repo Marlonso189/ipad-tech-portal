@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Per-session port and launch token. Two desktops on one host do not share a server."""
 
 import httpx

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 LABEL org.opencontainers.image.source="https://github.com/Marlonso189/ipad-tech-portal" \
       org.opencontainers.image.title="ipad-tech-portal" \
       org.opencontainers.image.description="Internal portal for limited changes to Jamf Pro-managed iPads" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
 RUN useradd --create-home --uid 10001 --user-group portal
 

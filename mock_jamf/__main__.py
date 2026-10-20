@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Serve the local Jamf stand-in. Default port is 8742."""
 
 from __future__ import annotations

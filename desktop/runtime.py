@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Desktop process setup. The window still serves the shared FastAPI app."""
 
 from __future__ import annotations
