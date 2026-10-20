@@ -7,6 +7,7 @@ from pathlib import Path
 import httpx
 from fastapi.testclient import TestClient
 
+from app import __version__
 from app.jamf_client import JamfClient
 from app.main import HTTPS_REQUIRED, create_app
 from mock_jamf.server import create_mock_app
@@ -57,9 +58,13 @@ def test_query_string_and_header_do_not_prefill_the_server(portal):
     assert 'id="jamf-url"' in page.text
     assert 'id="jamf-host"' in page.text
     assert 'placeholder="https://jamf.example.org:8443"' in page.text
-    assert 'class="source-link"' in page.text
-    assert 'href="https://github.com/Marlonso189/ipad-tech-portal"' in page.text
-    assert ">Source code</a>" in page.text
+    assert 'class="source-link"' not in page.text
+    assert ">Source code</a>" not in page.text
+    login = page.text.split('id="login-view"', 1)[1].split("</section>", 1)[0]
+    footer = page.text.split("<footer>", 1)[1].split("</footer>", 1)[0]
+    assert "github.com/Marlonso189/ipad-tech-portal" not in login
+    assert "github.com/Marlonso189/ipad-tech-portal" not in footer
+    assert 'id="session-bar" hidden' in page.text
     script = Path("app/static/app.js").read_text(encoding="utf-8")
     assert "localStorage" not in script
     assert "sessionStorage" not in script
@@ -104,6 +109,29 @@ def test_preview_shows_the_host_and_stores_nothing(portal):
     )
     assert http_preview.status_code == 400
     assert "https://" in http_preview.json()["message"]
+
+
+def test_about_panel_is_behind_the_signed_in_header(portal):
+    page = portal["client"].get("/")
+    assert page.status_code == 200
+    assert "{{app_version}}" not in page.text
+    assert "Source code" not in page.text
+    login = page.text.split('id="login-view"', 1)[1].split("</section>", 1)[0]
+    footer = page.text.split("<footer>", 1)[1].split("</footer>", 1)[0]
+    assert "github.com/Marlonso189/ipad-tech-portal" not in login
+    assert "github.com/Marlonso189/ipad-tech-portal" not in footer
+    header = page.text.split("<header", 1)[1].split("</header>", 1)[0]
+    assert 'id="session-bar" hidden' in header
+    session = header.split('id="session-bar"', 1)[1].split("</div>", 1)[0]
+    assert 'id="about-open"' in session
+    about = page.text.split('id="about-dialog"', 1)[1].split("</dialog>", 1)[0]
+    assert "<h2>iPad Tech Portal</h2>" in about
+    assert f"Version {__version__}" in about
+    assert "Licensed under AGPL-3.0-or-later" in about
+    assert 'href="https://github.com/Marlonso189/ipad-tech-portal"' in about
+    script = Path("app/static/app.js").read_text(encoding="utf-8")
+    assert "aboutDialog.showModal" in script
+    assert "aboutDialog.close" in script
 
 
 def test_page_over_http_is_refused_and_forwarded_https_is_accepted(portal):

@@ -22,6 +22,7 @@ const who = document.querySelector("#who");
 const results = document.querySelector("#results");
 const notice = document.querySelector("#notice");
 const loginAlert = document.querySelector("#login-alert");
+const aboutDialog = document.querySelector("#about-dialog");
 const confirmDialog = document.querySelector("#confirm-dialog");
 const lostDialog = document.querySelector("#lost-dialog");
 const wipeDialog = document.querySelector("#wipe-dialog");
@@ -29,6 +30,7 @@ const wipeDialog = document.querySelector("#wipe-dialog");
 document.querySelector("#login-form").addEventListener("submit", onLogin);
 document.querySelector("#jamf-url").addEventListener("input", scheduleHostPreview);
 document.querySelector("#logout").addEventListener("click", onLogout);
+document.querySelector("#about-open").addEventListener("click", () => aboutDialog.showModal());
 document.querySelector("#search-form").addEventListener("submit", onSearch);
 document.querySelector("#confirm-cancel").addEventListener("click", () => confirmDialog.close("cancel"));
 document.querySelector("#lost-cancel").addEventListener("click", () => lostDialog.close("cancel"));
@@ -97,6 +99,7 @@ function showAuditWarning(text) {
 }
 
 function showLogin(message) {
+  if (aboutDialog.open) aboutDialog.close();
   state.device = null;
   state.departments = null;
   state.buildings = null;
