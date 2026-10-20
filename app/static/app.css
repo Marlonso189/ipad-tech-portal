@@ -164,6 +164,31 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .notice.error { background: var(--err-bg); color: var(--err-ink); }
 
+.insecure-banner {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  background: #9f1239;
+  color: #fff;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.host-preview {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #e5f2ea;
+  color: #14532d;
+  font-weight: 650;
+}
+
+.host-preview strong {
+  font-family: Consolas, "Cascadia Mono", ui-monospace, monospace;
+  font-size: 1.05rem;
+}
+
 #audit-warning { margin-bottom: 1rem; }
 
 .card { display: grid; gap: 0.9rem; }

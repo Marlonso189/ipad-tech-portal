@@ -2,10 +2,16 @@
 # Copy this file to config.yaml (next to the application) and edit it.
 # Paths below are relative to this file's directory.
 # Do not put passwords, API tokens, or other secrets in this file.
+#
+# Technicians type the Jamf Pro server URL on the sign-in page. It is not
+# saved here. An old jamf.url key is ignored.
+
+# Lab only. Leave false. There is no switch for this on the page.
+# When true, sign-in works on an HTTP page and accepts an http:// Jamf URL,
+# and every page shows a red Insecure test mode banner.
+insecure_test_mode: false
 
 jamf:
-  # Jamf Pro base URL. No trailing path. Cloud or on-prem.
-  url: "https://jamf.example.org:8443"
   # Verify the Jamf TLS certificate. Set false only for a lab server
   # with a private certificate you cannot trust.
   verify_tls: true
@@ -22,7 +28,8 @@ server:
   cookie_name: "itp_session"
 
 session:
-  # Idle time before the in-memory session and its Jamf token are dropped.
+  # Idle time before the in-memory session, its Jamf token, and the Jamf
+  # server address are dropped.
   idle_timeout_minutes: 15
 
 groups:

@@ -3,12 +3,16 @@ const state = {
   features: {},
   updateInventoryDefault: true,
   idleTimeoutMinutes: 15,
+  insecureTestMode: false,
   departments: null,
   buildings: null,
   groups: null,
   device: null,
   busy: false,
 };
+
+// The Jamf server is typed on every sign-in. It is never read from the address
+// bar, from storage, or from a cookie. The only cookie is the opaque session id.
 
 const loginView = document.querySelector("#login-view");
 const appView = document.querySelector("#app-view");
@@ -22,6 +26,7 @@ const lostDialog = document.querySelector("#lost-dialog");
 const wipeDialog = document.querySelector("#wipe-dialog");
 
 document.querySelector("#login-form").addEventListener("submit", onLogin);
+document.querySelector("#jamf-url").addEventListener("input", scheduleHostPreview);
 document.querySelector("#logout").addEventListener("click", onLogout);
 document.querySelector("#search-form").addEventListener("submit", onSearch);
 document.querySelector("#confirm-cancel").addEventListener("click", () => confirmDialog.close("cancel"));
@@ -44,9 +49,6 @@ async function boot() {
   try {
     const data = await api("/api/bootstrap");
     applySession(data);
-    if (data.expired) {
-      showLogin("Your session timed out. Sign in again.");
-    }
   } catch (error) {
     showLogin(error.message);
   }
@@ -57,17 +59,28 @@ function applySession(data) {
   state.features = data.features || {};
   state.updateInventoryDefault = Boolean(data.updateInventoryDefault);
   state.idleTimeoutMinutes = data.idleTimeoutMinutes || 15;
+  if ("insecureTestMode" in data) {
+    state.insecureTestMode = Boolean(data.insecureTestMode);
+    document.querySelector("#insecure-banner").hidden = !state.insecureTestMode;
+  }
   if ("auditWarning" in data) showAuditWarning(data.auditWarning);
   document.querySelector("#foot").textContent =
     `Signed-in sessions idle out after ${state.idleTimeoutMinutes} minutes. Changes are written to the audit log and run with your own Jamf privileges.`;
+  if (data.pageHttpsRequired && data.pageIsHttps === false) {
+    showLogin(data.httpsRequiredMessage || "Sign-in is only available over HTTPS. Open the HTTPS address for this portal.");
+    setLoginEnabled(false);
+    return;
+  }
+  setLoginEnabled(true);
   if (data.authenticated) {
-    who.textContent = data.username;
+    who.textContent = data.jamfHost ? `${data.username} · ${data.jamfHost}` : data.username;
     sessionBar.hidden = false;
     loginView.hidden = true;
     appView.hidden = false;
     loginAlert.hidden = true;
   } else {
-    showLogin();
+    if (data.expired) clearSignInForm();
+    showLogin(data.expired ? "Your session timed out. Sign in again." : "");
   }
 }
 
@@ -96,21 +109,85 @@ function showLogin(message) {
   }
 }
 
+let hostPreviewTimer = 0;
+let hostPreviewSeq = 0;
+
+function scheduleHostPreview() {
+  window.clearTimeout(hostPreviewTimer);
+  hostPreviewTimer = window.setTimeout(() => {
+    refreshHostPreview();
+  }, 200);
+}
+
+async function refreshHostPreview() {
+  const raw = document.querySelector("#jamf-url").value.trim();
+  const node = document.querySelector("#jamf-host");
+  const seq = ++hostPreviewSeq;
+  if (!raw) {
+    node.hidden = true;
+    node.textContent = "";
+    return null;
+  }
+  try {
+    const data = await api("/api/jamf-url/preview", { method: "POST", body: { jamfUrl: raw } });
+    if (seq !== hostPreviewSeq) return data;
+    showJamfHost(data.host);
+    return data;
+  } catch (error) {
+    if (seq !== hostPreviewSeq) return null;
+    node.hidden = false;
+    node.textContent = error.message;
+    return null;
+  }
+}
+
+function showJamfHost(host) {
+  const node = document.querySelector("#jamf-host");
+  node.hidden = false;
+  node.textContent = "Jamf server: ";
+  const name = document.createElement("strong");
+  name.textContent = host;
+  node.append(name);
+}
+
+function setLoginEnabled(enabled) {
+  document.querySelectorAll("#login-form input, #login-form button").forEach((node) => {
+    node.disabled = !enabled;
+  });
+}
+
+function clearSignInForm() {
+  document.querySelector("#jamf-url").value = "";
+  document.querySelector("#username").value = "";
+  document.querySelector("#password").value = "";
+  const node = document.querySelector("#jamf-host");
+  node.hidden = true;
+  node.textContent = "";
+}
+
 async function onLogin(event) {
   event.preventDefault();
   const button = document.querySelector("#login-button");
+  const jamfUrl = document.querySelector("#jamf-url").value.trim();
   const username = document.querySelector("#username").value.trim();
   const password = document.querySelector("#password").value;
   button.disabled = true;
   try {
-    const data = await api("/api/login", { method: "POST", body: { username, password } });
-    document.querySelector("#password").value = "";
+    const preview = await refreshHostPreview();
+    if (!preview || !preview.host) return;
+    showJamfHost(preview.host);
+    await new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+    });
+    const data = await api("/api/login", { method: "POST", body: { jamfUrl, username, password } });
+    clearSignInForm();
     applySession(data);
     document.querySelector("#query").focus();
   } catch (error) {
+    document.querySelector("#password").value = "";
     showLogin(error.message);
   } finally {
-    button.disabled = false;
+    if (!document.querySelector("#jamf-url").disabled) button.disabled = false;
   }
 }
 
@@ -120,6 +197,7 @@ async function onLogout() {
   } catch (_error) {
     /* The local session is cleared even if Jamf could not be reached. */
   }
+  clearSignInForm();
   const data = await api("/api/bootstrap");
   applySession(data);
   showLogin();

@@ -46,6 +46,7 @@ class SyncASGITransport(httpx.BaseTransport):
 _ITP_ENV = (
     "ITP_CONFIG",
     "ITP_JAMF_URL",
+    "ITP_INSECURE_TEST_MODE",
     "ITP_VERIFY_TLS",
     "ITP_TIMEOUT_SECONDS",
     "ITP_HOST",
@@ -73,7 +74,6 @@ def _clear_itp_env(monkeypatch):
 def make_config(tmp_path: Path, **overrides) -> Config:
     values = dict(
         config_path=tmp_path / "config.yaml",
-        jamf_url="http://jamf.test",
         verify_tls=False,
         timeout_seconds=5,
         host="127.0.0.1",
@@ -106,14 +106,23 @@ def portal(tmp_path: Path):
     http.close()
 
 
-def login(client: TestClient, username: str = "tech", password: str = "demo-tech") -> dict:
+def login(
+    client: TestClient,
+    username: str = "tech",
+    password: str = "demo-tech",
+    jamf_url: str = "https://jamf.example.org:8443/",
+    headers: dict[str, str] | None = None,
+) -> dict:
     boot = client.get("/api/bootstrap")
     assert boot.status_code == 200, boot.text
     token = boot.json()["csrfToken"]
+    sent = {"X-CSRF-Token": token, "X-Forwarded-Proto": "https"}
+    if headers:
+        sent.update(headers)
     response = client.post(
         "/api/login",
-        json={"username": username, "password": password},
-        headers={"X-CSRF-Token": token},
+        json={"jamfUrl": jamf_url, "username": username, "password": password},
+        headers=sent,
     )
     assert response.status_code == 200, response.text
     return response.json()

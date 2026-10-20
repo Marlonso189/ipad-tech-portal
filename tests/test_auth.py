@@ -16,8 +16,8 @@ def test_login_cookie_is_httponly_and_password_is_not_stored(portal, tmp_path):
     token = response.json()["csrfToken"]
     logged_in = client.post(
         "/api/login",
-        json={"username": "tech", "password": "s3cret-not-stored"},
-        headers={"X-CSRF-Token": token},
+        json={"jamfUrl": "https://jamf.example.org", "username": "tech", "password": "s3cret-not-stored"},
+        headers={"X-CSRF-Token": token, "X-Forwarded-Proto": "https"},
     )
     assert logged_in.status_code == 200
     assert logged_in.json()["username"] == "tech"
@@ -58,14 +58,18 @@ def test_secure_cookie_flag(tmp_path):
 def test_login_requires_csrf_and_rejects_bad_password(portal):
     client = portal["client"]
     client.get("/api/bootstrap")
-    missing = client.post("/api/login", json={"username": "tech", "password": "demo-tech"})
+    missing = client.post(
+        "/api/login",
+        json={"jamfUrl": "https://jamf.example.org", "username": "tech", "password": "demo-tech"},
+        headers={"X-Forwarded-Proto": "https"},
+    )
     assert missing.status_code == 403
     assert missing.json()["error"] == "csrf"
 
     bad = client.post(
         "/api/login",
-        json={"username": "tech", "password": "not-the-password"},
-        headers=auth_header(client),
+        json={"jamfUrl": "https://jamf.example.org", "username": "tech", "password": "not-the-password"},
+        headers={**auth_header(client), "X-Forwarded-Proto": "https"},
     )
     assert bad.status_code == 401
     assert bad.json()["message"] == "Those Jamf credentials were not accepted."
@@ -77,8 +81,8 @@ def test_rejected_login_does_not_echo_password(portal):
     client.get("/api/bootstrap")
     response = client.post(
         "/api/login",
-        json={"username": "", "password": "echo-this-secret"},
-        headers=auth_header(client),
+        json={"jamfUrl": "https://jamf.example.org", "username": "", "password": "echo-this-secret"},
+        headers={**auth_header(client), "X-Forwarded-Proto": "https"},
     )
     assert response.status_code == 400
     assert "echo-this-secret" not in response.text

@@ -54,10 +54,12 @@ class AuditLog:
         after: Any,
         result: str,
         detail: str = "",
+        jamf_host: str = "",
     ) -> None:
         event = {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "username": username,
+            "jamfHost": jamf_host,
             "deviceId": device_id,
             "serialNumber": serial_number,
             "action": action,

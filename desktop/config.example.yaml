@@ -6,11 +6,17 @@
 # The desktop process ignores server.host, server.port, and server.cookie_secure.
 # Each session binds 127.0.0.1 on a free port and uses a random launch token.
 # The window is HTTP on loopback, so the process forces the session cookie
-# not to use the Secure flag. logging.path is also ignored: the application
+# not to use the Secure flag. That loopback page does not have to be HTTPS.
+# The Jamf URL is typed in the window on every sign-in and must be https
+# unless insecure_test_mode is true. logging.path is ignored: the application
 # log is written under %LOCALAPPDATA%\ipad-tech-portal\logs\.
 
+# Lab only. Leave false. There is no switch for this in the window.
+# When true, the sign-in page accepts an http:// Jamf URL and every page
+# shows a red Insecure test mode banner.
+insecure_test_mode: false
+
 jamf:
-  url: "https://jamf.example.org:8443"
   verify_tls: true
   timeout_seconds: 30
 

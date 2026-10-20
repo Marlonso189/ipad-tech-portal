@@ -10,13 +10,14 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.audit import AuditLog
 from app.config import Config
 from app.jamf_client import JamfClient
+from app.jamf_url import JamfUrlError, normalize_jamf_url
 from app.operations import TIMED_OUT, AppError, Portal
 from app.privileges import feature_map
 from app.redact import redact_text
@@ -26,13 +27,20 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 LAUNCH_COOKIE = "itp_launch"
 LAUNCH_COOKIE_SECONDS = 12 * 60 * 60
+HTTPS_REQUIRED = "Sign-in is only available over HTTPS. Open the HTTPS address for this portal."
 log = logging.getLogger("ipad")
 
 
 class LoginBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    jamfUrl: str = Field(min_length=1, max_length=512)
     username: str = Field(min_length=1, max_length=256)
     password: str = Field(min_length=1, max_length=256)
+
+
+class JamfUrlBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    jamfUrl: str = Field(min_length=1, max_length=512)
 
 
 class LocationBody(BaseModel):
@@ -77,12 +85,18 @@ class WipeBody(BaseModel):
 
 def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str | None = None) -> FastAPI:
     _setup_logging(config)
-    client = jamf or JamfClient(config.jamf_url, config.verify_tls, config.timeout_seconds)
+    client = jamf or JamfClient("", config.verify_tls, config.timeout_seconds)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if not config.verify_tls:
             log.warning("Jamf TLS certificate verification is disabled.")
+        if config.insecure_test_mode:
+            log.warning("Insecure test mode is on. HTTP pages and HTTP Jamf URLs are accepted.")
+        if config.ignored_jamf_url:
+            log.warning(
+                "jamf.url and ITP_JAMF_URL are ignored. Technicians enter the Jamf server on the sign-in page."
+            )
         yield
         app.state.jamf.close()
 
@@ -91,6 +105,7 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
     app.state.jamf = client
     app.state.sessions = SessionStore(config.idle_timeout_seconds)
     app.state.launch_token = launch_token or ""
+    app.state.loopback_exempt = config.loopback_exempt or bool(launch_token)
     app.state.audit = AuditLog(
         config.audit_path,
         config.audit_retention_days,
@@ -124,6 +139,15 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
                 _set_launch_cookie(response, config, launch_token)
                 return _headers(response)
 
+        if request.method == "POST" and request.url.path in {"/api/login", "/api/jamf-url/preview"}:
+            if _https_blocked(request):
+                return _headers(
+                    JSONResponse(
+                        status_code=403,
+                        content={"error": "https_required", "message": HTTPS_REQUIRED},
+                    )
+                )
+
         store: SessionStore = request.app.state.sessions
         if request.method in UNSAFE and request.url.path.startswith("/api/"):
             status, session = store.lookup(request.cookies.get(config.cookie_name))
@@ -148,7 +172,7 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
         response = await call_next(request)
         status, session = store.lookup(request.cookies.get(config.cookie_name))
         if status == "ok" and session is not None and request.url.path.startswith("/api/"):
-            _set_cookie(response, config, session)
+            _set_cookie(response, config, session, request)
         response = _headers(response)
         if launch_token:
             _set_launch_cookie(response, config, launch_token)
@@ -171,10 +195,20 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
         else:
             store.touch(session)
         response = JSONResponse(
-            _session_payload(session, config, expired=expired, audit_warning=request.app.state.audit.warning)
+            _session_payload(session, config, request, expired=expired, audit_warning=request.app.state.audit.warning)
         )
-        _set_cookie(response, config, session)
+        _set_cookie(response, config, session, request)
         return response
+
+    @app.post("/api/jamf-url/preview")
+    def preview_jamf_url(body: JamfUrlBody, request: Request) -> dict[str, str]:
+        """Show the normalized hostname. The address is not stored."""
+        store: SessionStore = request.app.state.sessions
+        _status, session = store.lookup(request.cookies.get(config.cookie_name))
+        if session is None:
+            raise AppError(403, "csrf", "The page security token was missing or expired. Reload and try again.")
+        _url, host = _checked_jamf_url(body.jamfUrl, config)
+        return {"host": host}
 
     @app.post("/api/login")
     def login(body: LoginBody, request: Request) -> JSONResponse:
@@ -182,7 +216,10 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
         _status, session = store.lookup(request.cookies.get(config.cookie_name))
         if session is None:
             raise AppError(403, "csrf", "The page security token was missing or expired. Reload and try again.")
+        jamf_url, jamf_host = _checked_jamf_url(body.jamfUrl, config)
         token, expires, username, privilege_set, privileges = request.app.state.portal.authenticate(
+            jamf_url,
+            jamf_host,
             body.username,
             body.password,
         )
@@ -191,11 +228,13 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
         session.token_expires = expires
         session.privileges = privileges
         session.privilege_set = privilege_set
+        session.jamf_url = jamf_url
+        session.jamf_host = jamf_host
         store.rotate(session)
         response = JSONResponse(
-            _session_payload(session, config, expired=False, audit_warning=request.app.state.audit.warning)
+            _session_payload(session, config, request, expired=False, audit_warning=request.app.state.audit.warning)
         )
-        _set_cookie(response, config, session)
+        _set_cookie(response, config, session, request)
         return response
 
     @app.post("/api/logout")
@@ -293,8 +332,15 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
         return request.app.state.portal.erase(_require(request), device_id, body.confirmSerial, body.wipeType)
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(STATIC_DIR / "index.html")
+    def index() -> HTMLResponse:
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        if config.insecure_test_mode:
+            html = html.replace(
+                '<p id="insecure-banner" class="insecure-banner" hidden>',
+                '<p id="insecure-banner" class="insecure-banner">',
+                1,
+            )
+        return HTMLResponse(html)
 
     @app.get("/favicon.ico")
     def favicon() -> Response:
@@ -316,31 +362,79 @@ def _require(request: Request) -> Session:
     return session
 
 
-def _session_payload(session: Session, config: Config, expired: bool, audit_warning: str = "") -> dict[str, Any]:
+def _session_payload(
+    session: Session,
+    config: Config,
+    request: Request,
+    expired: bool,
+    audit_warning: str = "",
+) -> dict[str, Any]:
     authenticated = session.authenticated
     features = feature_map(session.privileges, session.privilege_set) if authenticated else {}
+    page_https = _page_is_https(request)
+    page_required = _page_https_required(request)
     return {
         "authenticated": authenticated,
         "username": session.username if authenticated else "",
+        "jamfHost": session.jamf_host if authenticated else "",
         "csrfToken": session.csrf_token,
         "idleTimeoutMinutes": config.idle_timeout_seconds // 60,
         "updateInventoryDefault": config.update_inventory_after_change,
         "features": features,
         "expired": expired,
         "auditWarning": audit_warning,
+        "insecureTestMode": config.insecure_test_mode,
+        "pageHttpsRequired": page_required,
+        "pageIsHttps": page_https,
+        "httpsRequiredMessage": HTTPS_REQUIRED if page_required and not page_https else "",
     }
 
 
-def _set_cookie(response: Response, config: Config, session: Session) -> None:
+def _set_cookie(response: Response, config: Config, session: Session, request: Request) -> None:
     response.set_cookie(
         config.cookie_name,
         session.sid,
         httponly=True,
-        secure=config.cookie_secure,
+        secure=_cookie_secure(config, request),
         samesite="strict",
         path="/",
         max_age=config.idle_timeout_seconds,
     )
+
+
+def _cookie_secure(config: Config, request: Request) -> bool:
+    if not config.cookie_secure:
+        return False
+    # A Secure cookie is not stored on an HTTP page. Test mode is the only
+    # web path that allows that page, so the lab session has to be able to stick.
+    if config.insecure_test_mode and not _page_is_https(request):
+        return False
+    return True
+
+
+def _checked_jamf_url(raw: str, config: Config) -> tuple[str, str]:
+    try:
+        return normalize_jamf_url(raw, allow_http=config.insecure_test_mode)
+    except JamfUrlError as exc:
+        raise AppError(400, "invalid", exc.message) from None
+
+
+def _page_https_required(request: Request) -> bool:
+    config: Config = request.app.state.config
+    if config.insecure_test_mode or request.app.state.loopback_exempt:
+        return False
+    return True
+
+
+def _https_blocked(request: Request) -> bool:
+    return _page_https_required(request) and not _page_is_https(request)
+
+
+def _page_is_https(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    if forwarded.strip():
+        return forwarded.split(",")[0].strip().casefold() == "https"
+    return request.url.scheme == "https"
 
 
 def _headers(response: Response) -> Response:

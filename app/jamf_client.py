@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import quote
 
 import httpx
@@ -36,13 +38,34 @@ class JamfHTTPError(JamfError):
 class JamfClient:
     def __init__(self, base_url: str, verify_tls: bool, timeout: float, client: httpx.Client | None = None) -> None:
         self.base_url = base_url.rstrip("/")
+        self._local = threading.local()
         self._owns_client = client is None
+        # No base_url on the client. Each sign-in supplies an absolute URL via use(),
+        # so one process can talk to more than one Jamf server without keeping those
+        # addresses outside the session that typed them.
         self._client = client or httpx.Client(
-            base_url=self.base_url,
             verify=verify_tls,
             timeout=timeout,
             follow_redirects=False,
         )
+
+    @contextmanager
+    def use(self, base_url: str) -> Iterator[None]:
+        """Send the enclosed calls to this Jamf origin. The address is not saved."""
+        previous = getattr(self._local, "base_url", "")
+        self._local.base_url = base_url.rstrip("/")
+        try:
+            yield
+        finally:
+            self._local.base_url = previous
+
+    def _request_url(self, path: str) -> str:
+        if path.startswith(("http://", "https://")):
+            return path
+        base = getattr(self._local, "base_url", "") or self.base_url
+        if not base:
+            return path
+        return base.rstrip("/") + "/" + path.lstrip("/")
 
     def close(self) -> None:
         if self._owns_client:
@@ -260,7 +283,7 @@ class JamfClient:
         try:
             response = self._client.request(
                 "POST",
-                path,
+                self._request_url(path),
                 headers={"Accept": "application/xml", "Authorization": f"Bearer {token}"},
             )
         except httpx.TimeoutException as exc:
@@ -317,7 +340,7 @@ class JamfClient:
         try:
             response = self._client.request(
                 method,
-                path,
+                self._request_url(path),
                 headers=request_headers,
                 params=params,
                 json=json_body,
