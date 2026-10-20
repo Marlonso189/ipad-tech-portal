@@ -3,6 +3,10 @@
 A YAML file is optional. Environment variables override the file, and they are
 enough on their own. An empty string does not override a value, except
 ITP_GROUP_ALLOWLIST and ITP_GROUP_PREFIX, where empty is meaningful.
+
+The Jamf Pro address is not a setting. Each technician types it on the sign-in
+page, and it lives only in that process's session. jamf.url and ITP_JAMF_URL
+are ignored so an old file does not pin the server.
 """
 
 from __future__ import annotations
@@ -28,7 +32,6 @@ _LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 @dataclass(frozen=True)
 class Config:
     config_path: Path
-    jamf_url: str
     verify_tls: bool
     timeout_seconds: float
     host: str
@@ -44,6 +47,14 @@ class Config:
     update_inventory_after_change: bool
     log_path: Path
     log_level: str
+    # Lab switch. Off unless ITP_INSECURE_TEST_MODE or insecure_test_mode says so.
+    # There is no control for it in the page.
+    insecure_test_mode: bool = False
+    # Set by the desktop launcher. The window is HTTP on loopback, which is
+    # allowed. A Jamf URL still has to be https unless insecure test mode is on.
+    loopback_exempt: bool = False
+    # True when an old jamf.url or ITP_JAMF_URL was present and ignored.
+    ignored_jamf_url: bool = False
     # Set by the desktop launcher. The service and the container leave this empty
     # so a bad audit path fails startup instead of hiding the failure.
     audit_fallback_path: Path | None = None
@@ -61,11 +72,6 @@ def load_config(path: str | Path | None = None) -> Config:
             f"Configuration file not found: {config_path}. "
             "Copy config.example.yaml to config.yaml and edit it."
         )
-    elif _blank(os.environ.get("ITP_JAMF_URL")):
-        raise ConfigError(
-            "No configuration file was found and ITP_JAMF_URL is not set. "
-            "Copy config.example.yaml to config.yaml, or set the ITP_* environment variables."
-        )
 
     jamf = _section(data, "jamf")
     server = _section(data, "server")
@@ -75,11 +81,7 @@ def load_config(path: str | Path | None = None) -> Config:
     inventory = _section(data, "inventory")
     logging_cfg = _section(data, "logging")
 
-    env_url = os.environ.get("ITP_JAMF_URL", "").strip().rstrip("/")
-    jamf_url = env_url or str(jamf.get("url") or "").strip().rstrip("/")
-    if not jamf_url.startswith(("https://", "http://")):
-        source = "ITP_JAMF_URL" if env_url else "jamf.url"
-        raise ConfigError(f"{source} must start with https:// or http://.")
+    ignored_jamf_url = not _blank(os.environ.get("ITP_JAMF_URL")) or not _blank(str(jamf.get("url") or ""))
 
     timeout = _env_float("ITP_TIMEOUT_SECONDS", float(jamf.get("timeout_seconds") or 30))
     if timeout <= 0:
@@ -129,9 +131,13 @@ def load_config(path: str | Path | None = None) -> Config:
     audit_path = _env_text("ITP_AUDIT_PATH", str(audit.get("path") or "logs/audit.jsonl"))
     log_path = _env_text("ITP_LOG_PATH", str(logging_cfg.get("path") or "logs/app.log"))
 
+    file_test_mode = data.get("insecure_test_mode", False)
+    if not isinstance(file_test_mode, bool):
+        raise ConfigError("insecure_test_mode must be true or false.")
+    insecure_test_mode = _env_bool("ITP_INSECURE_TEST_MODE", file_test_mode)
+
     return Config(
         config_path=config_path,
-        jamf_url=jamf_url,
         verify_tls=_env_bool("ITP_VERIFY_TLS", bool(jamf.get("verify_tls", True))),
         timeout_seconds=timeout,
         host=_env_text("ITP_HOST", str(server.get("host") or "127.0.0.1")),
@@ -150,6 +156,8 @@ def load_config(path: str | Path | None = None) -> Config:
         ),
         log_path=_resolve_path(config_path, log_path),
         log_level=level,
+        insecure_test_mode=insecure_test_mode,
+        ignored_jamf_url=ignored_jamf_url,
     )
 
 

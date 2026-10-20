@@ -29,7 +29,8 @@ services:
 
   portal:
     environment:
-      ITP_JAMF_URL: http://mock:8742
+      # Sign in with Jamf URL http://mock:8742. Test mode allows that http URL.
+      ITP_INSECURE_TEST_MODE: "true"
     depends_on:
       mock:
         condition: service_healthy

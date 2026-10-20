@@ -9,7 +9,6 @@ services:
     restart: unless-stopped
     environment:
       ITP_CONFIG: /app/config.yaml
-      ITP_JAMF_URL: ${ITP_JAMF_URL:-}
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - portal-logs:/app/logs

@@ -36,9 +36,10 @@ def test_deployment_examples_have_no_secrets(tmp_path, monkeypatch):
     config = load_config(destination)
     assert config.host == "0.0.0.0"
     assert config.cookie_secure is True
+    assert config.insecure_test_mode is False
     assert _posix_path(config.audit_path) == PurePosixPath("/app/logs/audit.jsonl")
     assert _posix_path(config.log_path) == PurePosixPath("/app/logs/app.log")
-    assert config.jamf_url == "https://jamf.example.org:8443"
+    assert not hasattr(config, "jamf_url")
 
 
 def test_compose_publishes_https_only_and_mock_override_points_at_the_mock():
@@ -53,9 +54,10 @@ def test_compose_publishes_https_only_and_mock_override_points_at_the_mock():
     assert "portal-logs" in compose
     assert ":ro" in compose
     assert "password" not in compose.lower()
-    assert "ITP_JAMF_URL" in compose
+    assert "ITP_JAMF_URL" not in compose
 
     assert "http://mock:8742" in mock
+    assert "ITP_INSECURE_TEST_MODE" in mock
     assert "MOCK_JAMF_HOST" in mock
     assert "8742:8742" not in mock
 
@@ -83,19 +85,22 @@ def test_paste_in_compose_pulls_ghcr_and_does_not_build():
     publish = Path(".github/workflows/publish-image.yml").read_text(encoding="utf-8")
     script = Path("scripts/publish-image.sh").read_text(encoding="utf-8")
     readme = Path("README.md").read_text(encoding="utf-8")
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
 
     assert "ghcr.io/marlonso189/ipad-tech-portal:latest" in deploy
-    assert "image: caddy:2.10" in deploy
+    assert "image: caddy:" not in deploy
     assert "\n    build:" not in deploy
     assert "unless-stopped" in deploy
-    assert "portal-logs:" in deploy
-    assert "caddy-data:" in deploy
-    assert "replicas: 1" in deploy
-    assert "ITP_HOSTNAME" in deploy
-    assert "tls internal" in deploy
-    assert "ITP_TLS_CERT" in deploy
     assert "pull_policy: always" in deploy
+    assert "8741:8741" in deploy
+    assert "/opt/dockers/appdata/ipad-tech-portal/logs:/app/logs" in deploy
+    assert "ITP_JAMF_URL" not in deploy
+    assert "ITP_INSECURE_TEST_MODE" in deploy
+    assert deploy.count("ITP_INSECURE_TEST_MODE") == 1
+    assert "#   ITP_INSECURE_TEST_MODE:" in deploy or "#   ITP_INSECURE_TEST_MODE :" in deploy
     assert "password" not in deploy.lower()
+    assert "${" not in deploy
+    assert "ITP_HOST=0.0.0.0" in dockerfile
 
     assert "packages: write" in publish
     assert "linux/amd64,linux/arm64" in publish

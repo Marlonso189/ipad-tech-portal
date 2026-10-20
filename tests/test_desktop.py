@@ -86,7 +86,11 @@ def test_launch_token_is_per_process_and_cookie_is_httponly(tmp_path):
             boot = signed_in.get("/api/bootstrap")
             response = signed_in.post(
                 "/api/login",
-                json={"username": "tech", "password": "demo-tech"},
+                json={
+                    "jamfUrl": "https://jamf.example.org:8443/ignored",
+                    "username": "tech",
+                    "password": "demo-tech",
+                },
                 headers={"X-CSRF-Token": boot.json()["csrfToken"]},
             )
             assert response.status_code == 200
@@ -106,10 +110,16 @@ def test_launch_cookie_can_be_secure_and_login_still_needs_csrf(tmp_path):
         with TestClient(app, base_url="http://127.0.0.1", follow_redirects=False) as client:
             opened = client.get("/", params={"t": token})
             assert "secure" in _cookie_flags(opened.headers["set-cookie"])
-            blocked = client.post("/api/login", json={"username": "tech", "password": "demo-tech"})
+            blocked = client.post(
+                "/api/login",
+                json={"jamfUrl": "https://jamf.example.org", "username": "tech", "password": "demo-tech"},
+            )
             assert blocked.status_code == 404
             client.cookies.set(LAUNCH_COOKIE, token)
-            missing_csrf = client.post("/api/login", json={"username": "tech", "password": "demo-tech"})
+            missing_csrf = client.post(
+                "/api/login",
+                json={"jamfUrl": "https://jamf.example.org", "username": "tech", "password": "demo-tech"},
+            )
             assert missing_csrf.status_code == 403
             assert missing_csrf.json()["error"] == "csrf"
             boot = client.get("/api/bootstrap")
@@ -167,7 +177,8 @@ def test_desktop_config_forces_loopback_and_local_fallback(tmp_path, monkeypatch
     import yaml
 
     payload = {
-        "jamf": {"url": "https://jamf.example.org:8443", "verify_tls": True},
+        "jamf": {"verify_tls": True},
+        "insecure_test_mode": False,
         "server": {"host": "0.0.0.0", "port": 8741, "cookie_secure": True},
         "session": {"idle_timeout_minutes": 15},
         "groups": {"allowlist": [], "name_prefix": "Tech-"},
@@ -185,6 +196,9 @@ def test_desktop_config_forces_loopback_and_local_fallback(tmp_path, monkeypatch
     config = load_desktop_config()
     assert config.host == "127.0.0.1"
     assert config.cookie_secure is False
+    assert config.loopback_exempt is True
+    assert config.insecure_test_mode is False
+    assert not hasattr(config, "jamf_url")
     assert config.audit_fallback_path == local_app / "ipad-tech-portal" / "logs" / "audit.jsonl"
     assert config.log_path == local_app / "ipad-tech-portal" / "logs" / "app.log"
     assert str(config.audit_path).startswith("\\\\files.example.org\\")
@@ -227,7 +241,7 @@ def test_audit_fallback_is_shown_on_the_sign_in_payload(tmp_path):
     assert "password" not in AUDIT_FALLBACK_WARNING
 
 
-def test_jamf_url_env_and_path_placeholders(tmp_path, monkeypatch):
+def test_old_jamf_url_is_ignored_and_path_placeholders_expand(tmp_path, monkeypatch):
     destination = tmp_path / "config.yaml"
     text = """
 jamf:
@@ -244,13 +258,8 @@ logging:
     monkeypatch.setattr("app.config.getpass.getuser", lambda: "../tech")
     monkeypatch.setenv("ITP_JAMF_URL", "http://mock:8742")
     config = load_config(destination)
-    assert config.jamf_url == "http://mock:8742"
+    assert config.ignored_jamf_url is True
+    assert config.insecure_test_mode is False
+    assert not hasattr(config, "jamf_url")
     assert config.audit_path.name == "audit-rds_01-___tech.jsonl"
     assert config.audit_path.parent == (tmp_path / "logs").resolve()
-    monkeypatch.setenv("ITP_JAMF_URL", "not-a-url")
-    try:
-        load_config(destination)
-    except ConfigError as exc:
-        assert "ITP_JAMF_URL" in str(exc)
-    else:
-        raise AssertionError("expected ConfigError")

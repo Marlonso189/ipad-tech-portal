@@ -1,6 +1,6 @@
 # iPad Tech Portal
 
-A small internal site for technicians who need to make a limited set of changes to Jamf Pro-managed iPads. The technician signs in with their own Jamf Pro account. The server holds the Jamf bearer token. The browser never talks to Jamf.
+A small internal site for technicians who need to make a limited set of changes to Jamf Pro-managed iPads. It is not tied to one organization. Each technician signs in with their own Jamf Pro account and the address of that organization's Jamf Pro server, whether it is on-prem or Jamf Cloud. The server holds the Jamf bearer token and that server address for the sign-in only. The browser never talks to Jamf.
 
 About 2,000 devices is the expected size. Lookups are a single filtered inventory query. Nothing polls Jamf.
 
@@ -12,7 +12,7 @@ FastAPI fits this better than a full ASP.NET Core app. The portal is a session, 
 
 The same process is the core for every install. [Choose a deployment](#choose-a-deployment) covers the Windows service, the desktop window, and Docker Compose. None of them fork the request handling.
 
-Jamf Pro 11.30 is called with the signed-in technician's token. Settings come from environment variables, from `config.yaml`, or from both. An environment variable overrides the same setting in the file. The file is optional when `ITP_JAMF_URL` is set. Neither place holds a password.
+Jamf Pro 11.30 is called with the signed-in technician's token. Settings come from environment variables, from `config.yaml`, or from both. An environment variable overrides the same setting in the file. The file is optional. Neither place holds a password or a Jamf server URL. The technician types the URL on the sign-in page, every time.
 
 Install it as a Windows service behind IIS, as a desktop window on an RDS host, or as a single container. The steps for all three are in [Choose a deployment](#choose-a-deployment).
 
@@ -95,7 +95,7 @@ Paths inside the file are relative to the file's directory, not the service's wo
 
 | Key | Meaning |
 | --- | --- |
-| `jamf.url` | Jamf Pro base URL, for example `https://jamf.example.org:8443`. No path, no credentials. |
+| `insecure_test_mode` | Lab only. Default false. There is no control for this on the page. When true, an HTTP page and an `http://` Jamf URL are allowed, and every page shows a red Insecure test mode banner. On the Windows desktop app this key lives in the admin-only `%ProgramData%\ipad-tech-portal\config.yaml`. |
 | `jamf.verify_tls` | Check the Jamf certificate. Leave true outside a lab. |
 | `jamf.timeout_seconds` | Per-request timeout. |
 | `server.host` / `server.port` | Where uvicorn listens. Use `127.0.0.1` and `8741` behind IIS. |
@@ -109,20 +109,20 @@ Paths inside the file are relative to the file's directory, not the service's wo
 | `inventory.update_inventory_after_change` | Default for the "Queue Update Inventory" checkbox. |
 | `logging.path` / `logging.level` | Application log. Passwords and tokens are redacted. |
 
-There is no API client secret and no service account password in this file.
+There is no API client secret, no service account password, and no Jamf server URL in this file. `jamf.url` and `ITP_JAMF_URL` are ignored if an old file or environment still has them.
 
 ### Environment variables
 
 Set these in the service environment, in Compose, or in the shell before `python -m app`. Each one overrides the YAML key in the previous table. An empty value does not override the file, except `ITP_GROUP_ALLOWLIST` and `ITP_GROUP_PREFIX`: an empty allowlist means no allowlist, and an empty prefix means no prefix.
 
-If `config.yaml` is missing and `ITP_JAMF_URL` is unset, the process exits and names both options. `ITP_CONFIG` points at a file. A missing file at that explicit path is still an error.
+`config.yaml` is optional. The process starts with the defaults below when the file is absent. `ITP_CONFIG` points at a file. A missing file at that explicit path is still an error. The Jamf server URL is not one of these settings.
 
 Booleans accept `1`, `true`, `yes`, `on`, `0`, `false`, `no`, and `off`.
 
 | Variable | Overrides | When the variable is unset and there is no file |
 | --- | --- | --- |
 | `ITP_CONFIG` | which YAML file is read | `config.yaml` in the working directory, if that file exists |
-| `ITP_JAMF_URL` | `jamf.url` | required. Trailing slash is removed. Must start with `https://` or `http://` |
+| `ITP_INSECURE_TEST_MODE` | `insecure_test_mode` | `false`. Docker lab switch. Allows an HTTP page and an `http://` Jamf URL, and shows the red banner. Never expose a control for this in the page |
 | `ITP_VERIFY_TLS` | `jamf.verify_tls` | `true` |
 | `ITP_TIMEOUT_SECONDS` | `jamf.timeout_seconds` | `30` |
 | `ITP_HOST` | `server.host` | `127.0.0.1` |
@@ -139,13 +139,12 @@ Booleans accept `1`, `true`, `yes`, `on`, `0`, `false`, `no`, and `off`.
 | `ITP_LOG_PATH` | `logging.path` | `logs/app.log` |
 | `ITP_LOG_LEVEL` | `logging.level` | `INFO` (`DEBUG`, `INFO`, `WARNING`, or `ERROR`) |
 
-The paste-in Compose file also reads three variables that Caddy uses. The Python process ignores them.
+The from-source Compose file still reads two variables that Caddy uses. The Python process ignores them. The published image does not run Caddy.
 
 | Variable | Meaning |
 | --- | --- |
-| `ITP_HOSTNAME` | Name on the Caddy certificate. Default `ipad-tech.example.org`. |
-| `ITP_TLS_CERT` | Absolute path of a certificate file inside the Caddy container. Empty uses Caddy's internal CA. |
-| `ITP_TLS_KEY` | Absolute path of the matching private key. Set both paths, or leave both empty. |
+| `PORTAL_HOST` | Name on the from-source Caddy certificate. Default `ipad-tech.example.org`. |
+| `CADDYFILE` | Which Caddyfile the from-source stack mounts. |
 
 ## Run locally against the mock
 
@@ -167,11 +166,11 @@ copy config.example.yaml config.yaml
 
 On macOS or Linux the activate path is `.venv/bin/activate`, and `cp` replaces `copy`.
 
-Edit `config.yaml` for the mock:
+Edit `config.yaml` for the mock. The lab switch is what allows the HTTP page and the `http://` mock URL. Leave it false for anything else.
 
 ```yaml
+insecure_test_mode: true
 jamf:
-  url: "http://127.0.0.1:8742"
   verify_tls: false
 server:
   host: "127.0.0.1"
@@ -179,14 +178,14 @@ server:
   cookie_secure: false
 ```
 
+Open `http://127.0.0.1:8741`. On the sign-in page, the Jamf Pro server is `http://127.0.0.1:8742`. The page shows that host before the password is sent. A link cannot fill the field in. The mock listens on port 8742 (`MOCK_JAMF_PORT` overrides it).
+
 Start the mock, then the portal, from the repository root:
 
 ```bash
 python -m mock_jamf
 python -m app
 ```
-
-Open `http://127.0.0.1:8741`. The mock listens on port 8742 (`MOCK_JAMF_PORT` overrides it).
 
 Tests, with Jamf mocked in-process:
 
@@ -198,11 +197,11 @@ python -m pytest
 
 | | Windows service and IIS | Windows desktop app | Docker |
 | --- | --- | --- | --- |
-| Where it runs | One Windows Server, one service | One process per RDS session, published in Horizon | One portal container and Caddy |
-| Who reaches it | Browsers on the internal network, through IIS | The technician's own window on that session | Browsers through Caddy on port 443 |
-| HTTPS | IIS | The window talks to `127.0.0.1` over HTTP. A per-launch token stops other sessions on the same host from using it | Caddy internal TLS, or a certificate you mount |
-| Config | `config.yaml` next to the app | `%ProgramData%\ipad-tech-portal\config.yaml`, readable by users and writable by administrators | Environment variables on the paste-in stack. The from-source compose file can still mount `config.yaml` |
-| Audit log | A file on the server | A UNC path with a cross-process lock, or a local file if that path is down | Named volume `portal-logs` at `/app/logs` |
+| Where it runs | One Windows Server, one service | One process per RDS session, published in Horizon | One portal container behind your reverse proxy |
+| Who reaches it | Browsers on the internal network, through IIS | The technician's own window on that session | Browsers through the proxy, which forwards to port 8741 |
+| HTTPS | IIS | The window talks to `127.0.0.1` over HTTP. A per-launch token stops other sessions on the same host from using it. The Jamf URL is still `https://` | The reverse proxy. It must send `X-Forwarded-Proto: https` |
+| Config | `config.yaml` next to the app | `%ProgramData%\ipad-tech-portal\config.yaml`, readable by users and writable by administrators | No required environment variables. The image listens on `0.0.0.0:8741` |
+| Audit log | A file on the server | A UNC path with a cross-process lock, or a local file if that path is down | Bind mount `/opt/dockers/appdata/ipad-tech-portal/logs` at `/app/logs` |
 | Sessions | In memory, one worker | In memory, inside that user's process | In memory, one container |
 
 ### Windows service behind IIS
@@ -226,7 +225,7 @@ Copy-Item config.example.yaml config.yaml
 notepad config.yaml
 ```
 
-Set `jamf.url` to your Jamf Pro server, leave `verify_tls` true, leave `server.host` as `127.0.0.1`, and set `server.cookie_secure` to `true`.
+Leave `verify_tls` true, leave `server.host` as `127.0.0.1`, and set `server.cookie_secure` to `true`. Do not put a Jamf URL in the file. Technicians type it on the sign-in page. IIS must keep sending `X-Forwarded-Proto: https`, which `deploy\web.config` already sets. Sign-in is refused if that header is missing and the request is plain HTTP.
 
 Confirm it listens before installing the service:
 
@@ -357,7 +356,7 @@ powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 %ProgramData%\ipad-tech-portal\config.yaml
 ```
 
-The installer grants Users read and execute on that directory and Full control to Administrators. Edit the file as an administrator before technicians launch the app. Set `jamf.url`. Leave the file free of passwords. The process ignores `server.host`, `server.port`, and `server.cookie_secure`: it always binds loopback on a free port, and it leaves the Secure flag off because the window is HTTP on loopback. The application log goes to `%LOCALAPPDATA%\ipad-tech-portal\logs\app.log` so it does not need write access to ProgramData.
+The installer grants Users read and execute on that directory and Full control to Administrators. Edit the file as an administrator before technicians launch the app. Leave the file free of passwords and free of a Jamf URL. Technicians type the Jamf Pro URL in the window on every launch. The window's own page is `http://127.0.0.1` and is exempt from the HTTPS-page check. The Jamf URL still has to be `https://` unless an administrator sets `insecure_test_mode: true` in that file. There is no switch for that in the window. When it is on, every page shows a red Insecure test mode banner and an `http://` Jamf URL is accepted. The process ignores `server.host`, `server.port`, and `server.cookie_secure`: it always binds loopback on a free port, and it leaves the Secure flag off because the window is HTTP on loopback. The application log goes to `%LOCALAPPDATA%\ipad-tech-portal\logs\app.log` so it does not need write access to ProgramData.
 
 Set `audit.path` to a UNC share the technician accounts can modify, for example `\\files.example.org\ipad-tech\audit.jsonl`. Appends take a lock file beside the log (`audit.jsonl.lock`), so several sessions and several RDS hosts can share one file. `{host}` and `{user}` in the path expand to the computer name and the Windows account when you want a separate file per person. Retention runs when a file is written, so a single shared file is the one that gets cleaned up by whoever is working. If the path cannot be opened within 5 seconds, that session writes `%LOCALAPPDATA%\ipad-tech-portal\logs\audit.jsonl` and the sign-in page shows a warning. Those lines stay on that computer.
 
@@ -379,9 +378,9 @@ A technician starts **iPad Tech Portal** from the Horizon Client. The window ope
 
 ### Deploy with Dockhand / any compose manager
 
-Paste one Compose file. The manager pulls `ghcr.io/marlonso189/ipad-tech-portal` and the official `caddy:2.10` image. It does not check out this repository, it does not build, and it does not need a config file. The same text is stored at `deploy/docker-compose.yml`.
+Paste one Compose file. The manager pulls `ghcr.io/marlonso189/ipad-tech-portal`. It does not check out this repository, it does not build, and it does not need a config file or a Jamf URL. The same text is stored at `deploy/docker-compose.yml`.
 
-Caddy writes its own Caddyfile when the container starts. The default is Caddy's internal CA for `ITP_HOSTNAME`. Ports 80 and 443 are published. Port 8741 stays on the Compose network. Logs and Caddy's data use named volumes. Both services restart unless stopped, and each has a health check. The portal service is one replica because sessions are in memory.
+Put the container behind an HTTPS reverse proxy (Pangolin, IIS, Caddy, or anything else that sets `X-Forwarded-Proto: https`). The image listens on `0.0.0.0:8741`. Publish that port only to the proxy. Sign-in is refused when the page is plain HTTP and that header is not `https`. Technicians type the Jamf Pro URL on the sign-in page. Sessions stay in this one container.
 
 #### Put the repository on GitHub and publish the image
 
@@ -411,12 +410,20 @@ export GHCR_TOKEN=...
 
 #### Paste the stack
 
-Set `ITP_JAMF_URL` to the Jamf Pro base URL, such as `https://jamf.example.org:8443`. Set `ITP_HOSTNAME` to the DNS name technicians will open. Other variables are optional and are listed under [Environment variables](#environment-variables). In Dockhand, put them in the stack's environment. On a host, put them in a `.env` file next to the compose file or export them before `docker compose up`.
+No environment variable is required. Remove `ITP_JAMF_URL` if a previous stack set it. The proxy's HTTPS address is what technicians open. Create the log directory and give it to uid 10001, which is the user in the image:
+
+```bash
+sudo mkdir -p /opt/dockers/appdata/ipad-tech-portal/logs
+sudo chown 10001:10001 /opt/dockers/appdata/ipad-tech-portal/logs
+```
 
 ```yaml
 # Paste this file into Dockhand or any Compose manager.
-# It pulls images. It does not build, and it does not need a config file.
-# Set ITP_JAMF_URL (required) and ITP_HOSTNAME. One portal container only.
+# It pulls the image. It does not build, and it does not need a config file.
+# No Jamf URL is set here. Technicians type it on the sign-in page.
+# Run it behind an HTTPS reverse proxy that sets X-Forwarded-Proto.
+# One container only: sessions live in this process.
+# The process runs as uid 10001. The log directory must be writable by that user.
 
 name: ipad-tech-portal
 
@@ -425,129 +432,16 @@ services:
     image: ghcr.io/marlonso189/ipad-tech-portal:latest
     pull_policy: always
     restart: unless-stopped
-    # Sessions live in this process. Keep a single replica.
-    deploy:
-      replicas: 1
-    environment:
-      ITP_JAMF_URL: ${ITP_JAMF_URL:?Set ITP_JAMF_URL to the Jamf Pro base URL}
-      ITP_VERIFY_TLS: ${ITP_VERIFY_TLS:-true}
-      ITP_TIMEOUT_SECONDS: ${ITP_TIMEOUT_SECONDS:-30}
-      ITP_HOST: 0.0.0.0
-      ITP_PORT: "8741"
-      ITP_COOKIE_SECURE: "true"
-      ITP_COOKIE_NAME: ${ITP_COOKIE_NAME:-itp_session}
-      ITP_IDLE_TIMEOUT_MINUTES: ${ITP_IDLE_TIMEOUT_MINUTES:-15}
-      ITP_GROUP_ALLOWLIST: ${ITP_GROUP_ALLOWLIST-}
-      ITP_GROUP_PREFIX: ${ITP_GROUP_PREFIX-Tech-}
-      ITP_AUDIT_PATH: /app/logs/audit.jsonl
-      ITP_AUDIT_RETENTION_DAYS: ${ITP_AUDIT_RETENTION_DAYS:-90}
-      ITP_AUDIT_MAX_BYTES: ${ITP_AUDIT_MAX_BYTES:-10485760}
-      ITP_UPDATE_INVENTORY: ${ITP_UPDATE_INVENTORY:-true}
-      ITP_LOG_PATH: /app/logs/app.log
-      ITP_LOG_LEVEL: ${ITP_LOG_LEVEL:-INFO}
-    volumes:
-      - portal-logs:/app/logs
-    expose:
-      - "8741"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8741/api/health', timeout=3)",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-
-  caddy:
-    image: caddy:2.10
-    restart: unless-stopped
-    environment:
-      ITP_HOSTNAME: ${ITP_HOSTNAME:-ipad-tech.example.org}
-      ITP_TLS_CERT: ${ITP_TLS_CERT-}
-      ITP_TLS_KEY: ${ITP_TLS_KEY-}
     ports:
-      - "80:80"
-      - "443:443"
+      - "8741:8741"
     volumes:
-      - caddy-data:/data
-      - caddy-config:/config
-      # Own certificate: set ITP_TLS_CERT=/certs/cert.pem and ITP_TLS_KEY=/certs/key.pem,
-      # then replace the named volume below with a directory that holds those two files,
-      # for example: ./certs:/certs:ro
-      - caddy-certs:/certs:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        # itp-caddy-entrypoint
-        set -eu
-        host="$$ITP_HOSTNAME"
-        cert="$$ITP_TLS_CERT"
-        key="$$ITP_TLS_KEY"
-        if [ -z "$$host" ]; then
-          host="ipad-tech.example.org"
-        fi
-        printf '%s' "$$host" | grep -Eq '^[A-Za-z0-9.-]{1,253}$$' || {
-          echo "ITP_HOSTNAME must be a hostname such as ipad-tech.example.org" >&2
-          exit 1
-        }
-        if [ -n "$$cert" ] || [ -n "$$key" ]; then
-          if [ -z "$$cert" ] || [ -z "$$key" ]; then
-            echo "Set both ITP_TLS_CERT and ITP_TLS_KEY, or leave both empty." >&2
-            exit 1
-          fi
-          printf '%s' "$$cert" | grep -Eq '^/[A-Za-z0-9_./-]{1,240}$$' || {
-            echo "ITP_TLS_CERT must be an absolute path inside the container." >&2
-            exit 1
-          }
-          printf '%s' "$$key" | grep -Eq '^/[A-Za-z0-9_./-]{1,240}$$' || {
-            echo "ITP_TLS_KEY must be an absolute path inside the container." >&2
-            exit 1
-          }
-          tls="tls $$cert $$key"
-        else
-          tls="tls internal"
-        fi
-        cat > /tmp/Caddyfile <<EOF
-        {
-        	admin off
-        }
-        $$host {
-        	$$tls
-        	reverse_proxy portal:8741
-        }
-        EOF
-        exec caddy run --config /tmp/Caddyfile --adapter caddyfile
-        # end itp-caddy-entrypoint
-    depends_on:
-      portal:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "443"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-volumes:
-  portal-logs:
-  caddy-data:
-  caddy-config:
-  caddy-certs:
+      - /opt/dockers/appdata/ipad-tech-portal/logs:/app/logs
+    # Lab only. Leave this commented. It allows an HTTP page and an HTTP Jamf URL.
+    # environment:
+    #   ITP_INSECURE_TEST_MODE: "true"
 ```
 
-Point internal DNS for `ITP_HOSTNAME` at the Docker host and open TCP 443. On first start, Caddy creates a local CA in the `caddy-data` volume. Trust that root on technician computers:
-
-```bash
-docker compose -f deploy/docker-compose.yml cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
-```
-
-To use a certificate you already have, set `ITP_TLS_CERT=/certs/cert.pem` and `ITP_TLS_KEY=/certs/key.pem`, and replace the `caddy-certs` volume line with a read-only directory that contains those two files, for example `./certs:/certs:ro`. Leave both variables empty to stay on the internal CA.
-
-An allowlist of group names is a comma-separated `ITP_GROUP_ALLOWLIST`, such as `Tech-Loaner,Tech-Repair`. Leave it empty to use `ITP_GROUP_PREFIX` (default `Tech-`).
+Point the reverse proxy at `http://<docker-host>:8741` and set `X-Forwarded-Proto` to `https`. Do not publish 8741 to the general network if you can help it: a client that can reach the container directly can send that header itself. Optional settings such as `ITP_GROUP_ALLOWLIST` still work if you add them. Leave `ITP_INSECURE_TEST_MODE` commented out. Uncommenting it is the lab switch, and the page will show a red Insecure test mode banner.
 
 #### Change the package between private and public
 
@@ -564,19 +458,18 @@ Use this when you are changing the app and want to build the image on the same m
 
 ```bash
 cp config.docker.example.yaml config.yaml
-# Set jamf.url. Leave verify_tls true and cookie_secure true.
+# Leave verify_tls true and cookie_secure true. Do not set a Jamf URL.
 docker compose up -d --build
 ```
 
-Copy `.env.example` to `.env` when you want a different hostname or Jamf URL:
+Copy `.env.example` to `.env` when you want a different hostname:
 
 ```text
 PORTAL_HOST=ipad-tech.example.org
-ITP_JAMF_URL=https://jamf.example.org:8443
 CADDYFILE=./deploy/Caddyfile.internal
 ```
 
-`ITP_JAMF_URL` overrides `jamf.url` from the mounted file. Leave it empty to use the file. Compose publishes ports 80 and 443. It does not publish 8741.
+Compose publishes ports 80 and 443. It does not publish 8741. Technicians type the Jamf Pro URL on the sign-in page. Caddy's `reverse_proxy` sets `X-Forwarded-Proto` from the browser's scheme, so a sign-in on the HTTPS site is accepted. A direct request to the container port is not.
 
 The default Caddyfile uses `tls internal`. On first start, Caddy creates a local CA in the `caddy-data` volume. Export the root and trust it on technician machines:
 
@@ -597,19 +490,21 @@ cp config.docker.example.yaml config.yaml
 docker compose -f docker-compose.yml -f docker-compose.mock.yml up --build
 ```
 
-The overlay sets `ITP_JAMF_URL=http://mock:8742` and waits until the mock's `/health` responds. The mock listens on `0.0.0.0` inside the Compose network and its port is not published on the host. Sign in with the mock accounts from the local-run section. Trust the Caddy CA the same way, or the browser will warn about the certificate.
+The overlay sets `ITP_INSECURE_TEST_MODE=true` and waits until the mock's `/health` responds. The mock listens on `0.0.0.0` inside the Compose network and its port is not published on the host. On the sign-in page, the Jamf Pro server is `http://mock:8742`. Sign in with the mock accounts from the local-run section. Trust the Caddy CA the same way, or the browser will warn about the certificate. The red Insecure test mode banner is expected for this demo.
 
 Keep a single portal container. A second replica would have its own memory and would not see the first replica's sessions.
 
 ## Audit log
 
-Each change is one JSON object per line: `timestamp`, `username`, `deviceId`, `serialNumber`, `action`, `before`, `after`, `result`, `detail`. `result` is `success`, `denied`, or `error`. The active file is append-only. Rotation renames it; files older than `audit.retention_days` are removed. Passwords and tokens are not written.
+Each change is one JSON object per line: `timestamp`, `username`, `jamfHost`, `deviceId`, `serialNumber`, `action`, `before`, `after`, `result`, `detail`. `jamfHost` is the Jamf server hostname for that sign-in, with the port when it is not the default. `result` is `success`, `denied`, or `error`. The active file is append-only. Rotation renames it; files older than `audit.retention_days` are removed. Passwords, tokens, and the Jamf URL's userinfo are not written. The Jamf address itself is not written anywhere except this host field in the log and the application log line for a successful sign-in.
 
 Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rotate or append, so several desktop sessions can share one UNC file. On Windows the lock is a byte-range lock. On Linux it is `flock`. Retention still deletes rotated files older than `audit.retention_days` while that lock is held. The desktop app is the one that falls back to `%LOCALAPPDATA%\ipad-tech-portal\logs\audit.jsonl` when the configured path cannot be opened. The service and the container have no fallback: a bad path fails startup, which is what you want from a host you administer.
 
 ## Limitations
 
-- Sessions are in memory. A service restart signs everyone out. Run one process, not several workers, and not a web farm.
+- Sessions are in memory. The Jamf token and the Jamf server address live only there. Logout, the idle timeout (15 minutes by default), and a process restart drop both. Nothing about the sign-in is written to disk except the logs. Run one process, not several workers, and not a web farm.
+- The sign-in page asks for the Jamf server URL every time. A query string, a bookmark, or `ITP_JAMF_URL` cannot fill it in. Only `https://` URLs are accepted, with the path and a trailing slash removed, unless insecure test mode is on.
+- The web and Docker sign-in is refused unless the page is HTTPS. `X-Forwarded-Proto: https` from the reverse proxy counts. The Windows desktop window is the exception, because it is HTTP on `127.0.0.1`. Its Jamf URL still has to be `https://`.
 - Idle timeout is enforced on the next request. Abandoned sessions are dropped when any request touches the store. There is no timer thread.
 - Search is an exact serial or an exact asset tag. It is not a substring search, which keeps a 2,000-device lookup to one Jamf query. Duplicate asset tags return a picker.
 - Only iPad inventory records are shown. iPhones and other mobile devices are refused.
@@ -621,13 +516,14 @@ Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rot
 - MDM commands are queued. The page does not wait for the iPad to check in, and it does not poll command status.
 - Erase Device does not send a macOS PIN or a Return to Service profile. Lost Mode, Restart, and Erase still require whatever Apple and Jamf require of that device (supervised, managed, and a management id).
 - Privileges are read at login. A privilege removed in Jamf afterward still fails the live call with a permission message. The hidden buttons update at the next sign-in.
-- `cookie_secure: false` is for the local HTTP mock and for the desktop window, which loads `http://127.0.0.1`. The IIS site and the Docker site use HTTPS and `cookie_secure: true`. The desktop process forces the flag off even if the file says true.
+- `cookie_secure: false` is for the local HTTP mock and for the desktop window, which loads `http://127.0.0.1`. The IIS site and the Docker site use HTTPS and `cookie_secure: true`. The desktop process forces the flag off even if the file says true. Insecure test mode also leaves the Secure flag off when the page itself is HTTP, so the lab session can stick. The cookie value is still only the opaque session id.
+- Insecure test mode is off unless `ITP_INSECURE_TEST_MODE=true` (Docker) or `insecure_test_mode: true` in the admin-only Windows config. The page cannot turn it on. When it is on, a red Insecure test mode banner is on every page.
 - The mock's usernames and passwords are fake and exist only in `mock_jamf`. Point a production config at your Jamf server and have technicians use their own accounts.
 - The desktop launch token lives in process memory and in an HttpOnly cookie. It is not written to `config.yaml`. uvicorn access logs are off for that process so the token in the first URL is not written to disk.
 - Other RDS sessions can open TCP to `127.0.0.1` on this host. Requests without this process's launch token get 404, including `/api/health`. The process does not listen on the LAN.
 - If the audit share is down at startup, the desktop warning stays up for that run. Lines written to the local fallback are not copied to the share later.
 - A per-user audit file (`{user}` in the path) is purged only when that file is written again.
-- Docker runs one portal container. Scaling it would split sessions across processes.
+- Docker runs one portal container. Scaling it would split sessions across processes. The published port is 8741, and the logs are a bind mount at `/opt/dockers/appdata/ipad-tech-portal/logs`. The image sets `ITP_HOST=0.0.0.0` so that port accepts connections from the reverse proxy without a compose environment variable.
 - The prebuilt image is published from GitHub (`github.com/Marlonso189/ipad-tech-portal`), not from Cursor Origin. Until that push exists, `deploy/docker-compose.yml` has nothing to pull. `.github/workflows/publish-image.yml` and `scripts/publish-image.sh` are the two ways to create it.
 - The Windows executable and the Inno Setup installer are built on Windows. The workflow is `.github/workflows/desktop.yml`. A Linux checkout can run the tests and the container build, and it cannot produce `ipad-tech-portal.exe`. That desktop workflow also runs on GitHub, after the repository is there.
 - The desktop window needs the WebView2 Runtime on the RDS host.

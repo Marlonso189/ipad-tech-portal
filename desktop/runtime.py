@@ -41,6 +41,8 @@ def load_desktop_config() -> Config:
 
     The window talks to 127.0.0.1 over HTTP, so the Secure cookie flag is forced
     off or WebView2 will drop the session. Isolation is the launch token, not TLS.
+    That loopback page is exempt from the HTTPS-page check. The Jamf URL typed
+    at sign-in still has to be https unless insecure_test_mode is on.
     server.host and server.port in the file are ignored: each process binds
     127.0.0.1 on a free port. The application log is per user because ProgramData
     is not writable by technicians.
@@ -53,6 +55,7 @@ def load_desktop_config() -> Config:
         config,
         host="127.0.0.1",
         cookie_secure=False,
+        loopback_exempt=True,
         audit_fallback_path=local / "logs" / "audit.jsonl",
         log_path=local / "logs" / "app.log",
     )

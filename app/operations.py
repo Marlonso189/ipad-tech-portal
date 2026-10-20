@@ -43,34 +43,45 @@ class Portal:
         self.audit = audit
         self._cache: dict[tuple[str, str], tuple[float, Any]] = {}
 
-    def authenticate(self, username: str, password: str) -> tuple[str, float, str, str, set[str]]:
-        try:
-            token, expires = self.jamf.create_token(username, password)
-        except JamfAccessError:
-            log.info("Login failed")
-            raise AppError(401, "credentials", "Those Jamf credentials were not accepted.") from None
-        except JamfError as exc:
-            log.info("Login failed")
-            raise AppError(502, "jamf", exc.message) from exc
-        try:
-            payload = self.jamf.current_auth(token)
-        except JamfError:
-            self.jamf.invalidate(token)
-            log.info("Login failed")
-            raise AppError(
-                403,
-                "permission",
-                "Your Jamf account doesn't have permission for reading account privileges.",
-            ) from None
+    def authenticate(
+        self,
+        jamf_url: str,
+        jamf_host: str,
+        username: str,
+        password: str,
+    ) -> tuple[str, float, str, str, set[str]]:
+        with self.jamf.use(jamf_url):
+            try:
+                token, expires = self.jamf.create_token(username, password)
+            except JamfAccessError:
+                log.info("Login failed")
+                raise AppError(401, "credentials", "Those Jamf credentials were not accepted.") from None
+            except JamfError as exc:
+                log.info("Login failed")
+                raise AppError(502, "jamf", exc.message) from exc
+            try:
+                payload = self.jamf.current_auth(token)
+            except JamfError:
+                self.jamf.invalidate(token)
+                log.info("Login failed")
+                raise AppError(
+                    403,
+                    "permission",
+                    "Your Jamf account doesn't have permission for reading account privileges.",
+                ) from None
         account_name, privilege_set, privileges = extract_auth(payload)
-        log.info("Login succeeded for %s", account_name or username)
+        log.info("Login succeeded for %s at %s", account_name or username, jamf_host)
         return token, expires, account_name or username, privilege_set, privileges
 
     def logout(self, session: Session) -> None:
-        if session.token:
-            self.jamf.invalidate(session.token)
-            session.token = None
-        log.info("Logout for %s", session.username or "unknown")
+        token = session.token
+        jamf_url = session.jamf_url
+        username = session.username or "unknown"
+        if token and jamf_url:
+            with self.jamf.use(jamf_url):
+                self.jamf.invalidate(token)
+        session.clear_secrets()
+        log.info("Logout for %s", username)
 
     def departments(self, session: Session) -> list[dict[str, str]]:
         self._require(session, "update_location")
@@ -592,7 +603,7 @@ class Portal:
         raise AppError(403, "permission", message)
 
     def _cached(self, session: Session, kind: str, loader: Callable[[], Any]) -> Any:
-        key = (session.username or "", kind)
+        key = (session.jamf_host or "", session.username or "", kind)
         cached = self._cache.get(key)
         now = time.time()
         if cached and now - cached[0] < 300:
@@ -602,6 +613,12 @@ class Portal:
         return value
 
     def _call(self, session: Session, action: str, fn: Callable[[str], Any]) -> Any:
+        if not session.token or not session.jamf_url:
+            raise AppError(401, "session_expired", SESSION_EXPIRED)
+        with self.jamf.use(session.jamf_url):
+            return self._call_bound(session, action, fn)
+
+    def _call_bound(self, session: Session, action: str, fn: Callable[[str], Any]) -> Any:
         if not session.token:
             raise AppError(401, "session_expired", SESSION_EXPIRED)
         try:
@@ -666,6 +683,7 @@ class Portal:
             after=after,
             result=result,
             detail=detail,
+            jamf_host=session.jamf_host or "",
         )
 
     def _record_unknown(self, session: Session, device_id: str, action: str, exc: AppError) -> None:
@@ -678,6 +696,7 @@ class Portal:
             after=None,
             result=_result_for(exc),
             detail=exc.message,
+            jamf_host=session.jamf_host or "",
         )
 
 

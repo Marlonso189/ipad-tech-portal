@@ -1,16 +1,23 @@
 # Container config. Copy to config.yaml beside docker-compose.yml and edit it.
 # Compose mounts that file read-only at /app/config.yaml.
 # Do not put passwords, API tokens, or other secrets in this file.
-# ITP_JAMF_URL, when set on the container, replaces jamf.url.
+#
+# Technicians type the Jamf Pro server URL on the sign-in page. It is not
+# saved here. The published image does not use this file: set
+# ITP_INSECURE_TEST_MODE on that container instead, and only for a lab.
+
+# Lab only. Leave false. There is no switch for this on the page.
+insecure_test_mode: false
 
 jamf:
-  url: "https://jamf.example.org:8443"
+  # Verify the Jamf TLS certificate. Set false only for a lab server
+  # with a private certificate you cannot trust.
   verify_tls: true
   timeout_seconds: 30
 
 server:
   # Listen on every interface inside the container so the reverse proxy can connect.
-  # Do not publish this port on the host. Caddy publishes 443.
+  # Do not publish this port on the host when Caddy publishes 443.
   host: "0.0.0.0"
   port: 8741
   cookie_secure: true

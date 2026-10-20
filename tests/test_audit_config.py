@@ -170,7 +170,8 @@ def test_example_config_loads(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("ITP_JAMF_URL", raising=False)
     example = yaml.safe_load(Path("config.example.yaml").read_text(encoding="utf-8"))
     assert "password" not in json.dumps(example).lower()
-    assert example["jamf"]["url"] == "https://jamf.example.org:8443"
+    assert example["insecure_test_mode"] is False
+    assert "url" not in example.get("jamf", {})
     destination = tmp_path / "config.yaml"
     destination.write_text(Path("config.example.yaml").read_text(encoding="utf-8"), encoding="utf-8")
     config = load_config(destination)
@@ -179,6 +180,7 @@ def test_example_config_loads(tmp_path: Path, monkeypatch):
     assert config.group_name_prefix == "Tech-"
     assert config.audit_retention_days == 90
     assert config.verify_tls is True
+    assert config.insecure_test_mode is False
     assert config.cookie_secure is True
     assert config.audit_path.parent == (tmp_path / "logs").resolve()
     assert config.audit_fallback_path is None

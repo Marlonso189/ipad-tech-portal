@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  <p id="insecure-banner" class="insecure-banner" hidden>Insecure test mode</p>
   <header class="mast">
     <div class="mast-inner">
       <div>
@@ -25,9 +26,13 @@
     <p id="audit-warning" class="notice error" hidden></p>
     <section id="login-view" class="panel narrow">
       <h2>Sign in</h2>
-      <p class="lede">Use your Jamf Pro username and password. The password is exchanged for a token and is not stored.</p>
+      <p class="lede">Enter your organization's Jamf Pro server, then your Jamf username and password. The password is exchanged for a token and is not stored. The server address is kept only for this sign-in.</p>
       <p id="login-alert" class="notice error" hidden></p>
-      <form id="login-form">
+      <form id="login-form" autocomplete="off">
+        <label>Jamf Pro server
+          <input id="jamf-url" name="jamf-server" type="text" inputmode="url" autocomplete="off" spellcheck="false" required maxlength="512" placeholder="https://jamf.example.org:8443">
+        </label>
+        <p id="jamf-host" class="host-preview" hidden></p>
         <label>Jamf username
           <input id="username" name="username" autocomplete="username" required maxlength="256">
         </label>

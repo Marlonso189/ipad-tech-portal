@@ -19,10 +19,23 @@ class Session:
     token_expires: float | None = None
     privileges: set[str] = field(default_factory=set)
     privilege_set: str = ""
+    # Normalized Jamf origin for this sign-in only. Cleared with the token.
+    jamf_url: str | None = None
+    jamf_host: str | None = None
 
     @property
     def authenticated(self) -> bool:
-        return bool(self.username and self.token)
+        return bool(self.username and self.token and self.jamf_url)
+
+    def clear_secrets(self) -> None:
+        """Drop the Jamf token and server address from this object."""
+        self.username = None
+        self.token = None
+        self.token_expires = None
+        self.privileges = set()
+        self.privilege_set = ""
+        self.jamf_url = None
+        self.jamf_host = None
 
 
 class SessionStore:
@@ -51,6 +64,7 @@ class SessionStore:
             session = self._sessions.get(sid)
             if session is not None and self._expired(session):
                 self._sessions.pop(sid, None)
+                session.clear_secrets()
                 self._sweep_locked()
                 return "expired", None
             self._sweep_locked()
@@ -72,7 +86,10 @@ class SessionStore:
 
     def delete(self, sid: str) -> Session | None:
         with self._lock:
-            return self._sessions.pop(sid, None)
+            session = self._sessions.pop(sid, None)
+        if session is not None:
+            session.clear_secrets()
+        return session
 
     def authenticated_sessions(self) -> list[Session]:
         with self._lock:
@@ -94,4 +111,6 @@ class SessionStore:
     def _sweep_locked(self) -> None:
         stale = [sid for sid, session in self._sessions.items() if self._expired(session)]
         for sid in stale:
-            self._sessions.pop(sid, None)
+            session = self._sessions.pop(sid, None)
+            if session is not None:
+                session.clear_secrets()

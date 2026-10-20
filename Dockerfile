@@ -1,7 +1,8 @@
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    ITP_HOST=0.0.0.0
 
 LABEL org.opencontainers.image.source="https://github.com/Marlonso189/ipad-tech-portal" \
       org.opencontainers.image.title="ipad-tech-portal" \
