@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Wipe: Full wipe (v2 MDM ERASE_DEVICE) vs Return to Service (PreStage-based erase endpoint)."""
 
 import json

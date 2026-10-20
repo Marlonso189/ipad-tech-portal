@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Map portal features to Jamf Pro privilege names.
 
 The strings are the privilege names returned by GET /api/v1/auth

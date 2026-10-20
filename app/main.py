@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """HTTP application for the iPad tech portal."""
 
 from __future__ import annotations

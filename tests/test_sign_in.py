@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Sign-in asks for the Jamf server every time and keeps it in memory only."""
 
 import json
@@ -56,6 +57,9 @@ def test_query_string_and_header_do_not_prefill_the_server(portal):
     assert 'id="jamf-url"' in page.text
     assert 'id="jamf-host"' in page.text
     assert 'placeholder="https://jamf.example.org:8443"' in page.text
+    assert 'class="source-link"' in page.text
+    assert 'href="https://github.com/Marlonso189/ipad-tech-portal"' in page.text
+    assert ">Source code</a>" in page.text
     script = Path("app/static/app.js").read_text(encoding="utf-8")
     assert "localStorage" not in script
     assert "sessionStorage" not in script

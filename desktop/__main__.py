@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Open the portal in a desktop window and invalidate Jamf tokens when it closes.
 
 Run with `python -m desktop` during development. The installed executable uses

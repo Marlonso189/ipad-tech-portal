@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: AGPL-3.0-or-later
 ; Inno Setup 6. Builds desktop\output\ipad-tech-portal-setup.exe.
 ; The config file is installed only when it is missing, and technicians can read it but not change it.
 
@@ -10,6 +11,8 @@ AppId={{A7E3C1D4-5B29-4F0E-9C6A-8D2F1E0B7A44}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=ipad-tech-portal
+AppCopyright=Copyright (C) 2026 Marvin Alonso
+LicenseFile=..\LICENSE
 DefaultDirName={autopf}\ipad-tech-portal
 DefaultGroupName=iPad Tech Portal
 OutputDir=output

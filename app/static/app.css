@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
 :root {
   color-scheme: light;
   --ink: #1c2421;
@@ -292,6 +293,16 @@ footer {
   padding: 0 0 2rem;
   color: var(--muted);
   font-size: 0.88rem;
+}
+
+.source-link {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+}
+
+.source-link a {
+  color: var(--muted);
+  text-underline-offset: 0.12em;
 }
 
 @media (max-width: 800px) {

@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Push a multi-arch image to GHCR from any machine that has Docker Buildx.
 # This script does not contain a token. Export one before you run it:
 #
@@ -58,6 +59,7 @@ docker buildx build \
   --file Dockerfile \
   --push \
   --label org.opencontainers.image.source=https://github.com/Marlonso189/ipad-tech-portal \
+  --label org.opencontainers.image.licenses=AGPL-3.0-or-later \
   "$@" \
   .
 

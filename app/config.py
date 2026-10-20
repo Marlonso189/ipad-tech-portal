@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Load the portal configuration. The file contains no secrets.
 
 A YAML file is optional. Environment variables override the file, and they are

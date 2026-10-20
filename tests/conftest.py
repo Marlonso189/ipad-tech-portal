@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Shared fixtures. Jamf is the in-process mock, not a network service."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Device actions. Every Jamf call uses the signed-in tech's token."""
 
 from __future__ import annotations

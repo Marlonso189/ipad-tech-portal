@@ -527,3 +527,9 @@ Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rot
 - The prebuilt image is published from GitHub (`github.com/Marlonso189/ipad-tech-portal`), not from Cursor Origin. Until that push exists, `deploy/docker-compose.yml` has nothing to pull. `.github/workflows/publish-image.yml` and `scripts/publish-image.sh` are the two ways to create it.
 - The Windows executable and the Inno Setup installer are built on Windows. The workflow is `.github/workflows/desktop.yml`. A Linux checkout can run the tests and the container build, and it cannot produce `ipad-tech-portal.exe`. That desktop workflow also runs on GitHub, after the repository is there.
 - The desktop window needs the WebView2 Runtime on the RDS host.
+
+## License
+
+This program is free software under the GNU Affero General Public License, version 3 or any later version (AGPL-3.0-or-later). Copyright (C) 2026 Marvin Alonso. The full text is in `LICENSE`.
+
+You may use, study, change, and share this portal. If you give someone a copy, the same license has to travel with it, including your changes. If you run a modified version and other people use it over a network, you must offer them the source code of that version. That network rule is section 13 of the AGPL. The sign-in page and the app pages carry a small Source code link to https://github.com/Marlonso189/ipad-tech-portal, which is the source for this copy. There is no warranty.

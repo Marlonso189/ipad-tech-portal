@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """One-folder Windows build. One-file extraction would repeat for every RDS session."""
 
 import os

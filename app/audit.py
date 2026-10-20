@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Append-only JSON-lines audit log with size and age rotation.
 
 Several processes can append to one file. A lock file beside the data file

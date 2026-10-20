@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Deployment files stay generic and keep the portal as a single process."""
 
 import json
@@ -101,6 +102,21 @@ def test_paste_in_compose_pulls_ghcr_and_does_not_build():
     assert "password" not in deploy.lower()
     assert "${" not in deploy
     assert "ITP_HOST=0.0.0.0" in dockerfile
+    assert 'org.opencontainers.image.licenses="AGPL-3.0-or-later"' in dockerfile
+    assert 'org.opencontainers.image.source="https://github.com/Marlonso189/ipad-tech-portal"' in dockerfile
+    assert "org.opencontainers.image.licenses=AGPL-3.0-or-later" in publish
+    assert "org.opencontainers.image.licenses=AGPL-3.0-or-later" in script
+    assert "MIT" not in dockerfile
+
+    license_text = Path("LICENSE").read_text(encoding="utf-8")
+    assert license_text.startswith("Copyright (C) 2026 Marvin Alonso\n\n")
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in license_text
+    assert "Version 3, 19 November 2007" in license_text
+    installer = Path("desktop/installer.iss").read_text(encoding="utf-8")
+    assert "LicenseFile=..\\LICENSE" in installer
+    assert "AppCopyright=Copyright (C) 2026 Marvin Alonso" in installer
+    assert "AGPL-3.0-or-later" in readme
+    assert "## License" in readme
 
     assert "packages: write" in publish
     assert "linux/amd64,linux/arm64" in publish
