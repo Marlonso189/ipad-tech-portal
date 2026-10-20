@@ -4,6 +4,52 @@ A small internal site for technicians who need to make a limited set of changes 
 
 About 2,000 devices is the expected size. Lookups are a single filtered inventory query. Nothing polls Jamf.
 
+## Screenshots
+
+These pictures are the local mock. The devices, names, and server address are made up.
+
+### Sign in
+
+![Sign-in page](docs/screenshots/sign-in.png)
+
+The Jamf server is typed on every visit.
+
+### Search
+
+![Search results when two iPads share an asset tag](docs/screenshots/search-results.png)
+
+A shared asset tag returns a picker.
+
+### Device detail
+
+![Department, building, room, assigned user, and asset tag](docs/screenshots/device-detail.png)
+
+Department and building are lists from Jamf. Room, the assigned user, and the asset tag are editable.
+
+### Static groups
+
+![Static group checkboxes](docs/screenshots/static-groups.png)
+
+Checked groups are the ones this iPad is in. The others can be added or removed.
+
+### Actions
+
+![Restart, update inventory, clear passcode, and Lost Mode](docs/screenshots/actions.png)
+
+Restart, Update Inventory, Clear Passcode, and Lost Mode.
+
+### Wipe
+
+![Erase confirmation with full wipe and Return to Service](docs/screenshots/wipe-confirm.png)
+
+Erase asks for the serial, then a full wipe or a wipe with Return to Service.
+
+### About
+
+![About panel with version, AGPL license, and source link](docs/screenshots/about.png)
+
+After sign-in, About shows the version, the AGPL-3.0-or-later license, and the source repository.
+
 ## Stack
 
 Python, [FastAPI](https://fastapi.tiangolo.com/), and [uvicorn](https://www.uvicorn.org/), with a single HTML page and no frontend build.
