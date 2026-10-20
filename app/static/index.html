@@ -18,6 +18,7 @@
       </div>
       <div class="mast-actions" id="session-bar" hidden>
         <p id="who"></p>
+        <button type="button" class="about-open" id="about-open">About</button>
         <button type="button" class="secondary light" id="logout">Sign out</button>
       </div>
     </div>
@@ -63,8 +64,19 @@
 
   <footer>
     <p id="foot">Internal use. Changes are written to the audit log and run with your own Jamf privileges.</p>
-    <p class="source-link"><a href="https://github.com/Marlonso189/ipad-tech-portal">Source code</a></p>
   </footer>
+
+  <dialog id="about-dialog" class="about">
+    <form method="dialog">
+      <h2>iPad Tech Portal</h2>
+      <p>Version {{app_version}}</p>
+      <p>Licensed under AGPL-3.0-or-later</p>
+      <p class="about-source"><a href="https://github.com/Marlonso189/ipad-tech-portal">https://github.com/Marlonso189/ipad-tech-portal</a></p>
+      <div class="dialog-actions">
+        <button type="submit" class="secondary">Close</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="confirm-dialog">
     <form id="confirm-form">

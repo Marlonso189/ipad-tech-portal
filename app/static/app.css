@@ -152,6 +152,20 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   border-color: rgba(246, 243, 236, 0.45);
 }
 
+.about-open {
+  background: none;
+  border: 0;
+  color: #d5e4df;
+  font-size: 0.82rem;
+  font-weight: 500;
+  min-height: 0;
+  padding: 0.15rem 0.05rem;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.about-open:hover { color: #f6f3ec; }
+
 .danger { background: var(--danger); color: var(--danger-ink); }
 .danger:hover:not(:disabled) { background: #742420; }
 
@@ -289,20 +303,23 @@ dialog form {
 
 dialog::backdrop { background: rgba(20, 32, 28, 0.48); }
 
+dialog.about { width: min(24rem, calc(100vw - 2rem)); }
+
+dialog.about p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.about-source { overflow-wrap: anywhere; }
+
+.about-source a { color: var(--teal); }
+
 footer {
   padding: 0 0 2rem;
   color: var(--muted);
   font-size: 0.88rem;
-}
-
-.source-link {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-}
-
-.source-link a {
-  color: var(--muted);
-  text-underline-offset: 0.12em;
 }
 
 @media (max-width: 800px) {

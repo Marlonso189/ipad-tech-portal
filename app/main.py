@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
+from app import __version__
 from app.audit import AuditLog
 from app.config import Config
 from app.jamf_client import JamfClient
@@ -335,6 +336,7 @@ def create_app(config: Config, jamf: JamfClient | None = None, launch_token: str
     @app.get("/")
     def index() -> HTMLResponse:
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        html = html.replace("{{app_version}}", __version__, 1)
         if config.insecure_test_mode:
             html = html.replace(
                 '<p id="insecure-banner" class="insecure-banner" hidden>',
