@@ -424,6 +424,8 @@ A technician starts **iPad Tech Portal** from the Horizon Client. The window ope
 
 ### macOS app
 
+**Signed and notarized macOS builds are pending Apple Developer account approval.** Until then the release artifacts are unsigned, so Gatekeeper will warn. For testing, right-click the app and choose Open, or allow it in System Settings > Privacy & Security.
+
 Use this when a Jamf org does not want to host a server, a reverse proxy, or a Windows session. The technician installs a Mac app. It runs the same portal in its own window, on that Mac only. Nothing is saved between launches. The technician types the Jamf Pro URL, username, and password every time, and the session stays in memory.
 
 The window is [pywebview](https://pywebview.flowrl.com/), which uses WKWebView on macOS. The package is PyInstaller, the same tool as the Windows build, producing `iPad Tech Portal.app`, then a `.pkg` and a `.dmg`. A separate Swift shell would still have to ship this Python process, so the app bundles the process it already shares with Windows. GitHub's macOS 26 runners are Apple Silicon. A universal binary would need a second Python build, so the download is arm64 for macOS 26.
@@ -449,7 +451,7 @@ The GitHub Actions workflow `.github/workflows/macos.yml` builds on `macos-26` f
 
 A technician can open the disk image and drag **iPad Tech Portal** to Applications. For a fleet, upload the `.pkg` to Jamf and scope it. It installs `/Applications/iPad Tech Portal.app`. Add the configuration profile above only where the lab switch should be on.
 
-Signed and notarized builds need these repository secrets. When `MACOS_CERTIFICATE_APPLICATION_P12` is absent, the workflow still uploads an unsigned pkg and dmg and does not fail. A downloaded unsigned app is blocked by Gatekeeper. A Jamf package install is the practical way to test an unsigned build. Add the secrets when you want a release that opens without a warning.
+Signed and notarized builds need these repository secrets. When `MACOS_CERTIFICATE_APPLICATION_P12` is absent, the workflow still uploads an unsigned pkg and dmg and does not fail. That is the current build, while Apple Developer account approval is pending. Add the secrets when you want a release that opens without the Gatekeeper warning.
 
 | Secret | Contents |
 | --- | --- |
