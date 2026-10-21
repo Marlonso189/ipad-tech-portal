@@ -70,6 +70,8 @@ _ITP_ENV = (
 def _clear_itp_env(monkeypatch):
     for key in _ITP_ENV:
         monkeypatch.delenv(key, raising=False)
+    # An empty value skips the Mac's real preference files during tests.
+    monkeypatch.setenv("ITP_MAC_PREFS", "")
 
 
 def make_config(tmp_path: Path, **overrides) -> Config:

@@ -59,16 +59,20 @@ class Config:
     # Set by the desktop launcher. The service and the container leave this empty
     # so a bad audit path fails startup instead of hiding the failure.
     audit_fallback_path: Path | None = None
+    # Application-log rotation. Zero keeps a plain file, which is what the
+    # service, the container, and the Windows app use. The Mac app sets both.
+    log_max_bytes: int = 0
+    log_retention_days: int = 0
 
 
-def load_config(path: str | Path | None = None) -> Config:
+def load_config(path: str | Path | None = None, *, optional: bool = False) -> Config:
     explicit = path is not None or "ITP_CONFIG" in os.environ
     raw_path = path if path is not None else os.environ.get("ITP_CONFIG") or "config.yaml"
     config_path = _anchor(raw_path)
     data: dict = {}
     if config_path.is_file():
         data = _read_yaml(config_path)
-    elif explicit:
+    elif explicit and not optional:
         raise ConfigError(
             f"Configuration file not found: {config_path}. "
             "Copy config.example.yaml to config.yaml and edit it."

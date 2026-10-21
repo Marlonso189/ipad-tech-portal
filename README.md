@@ -56,11 +56,11 @@ Python, [FastAPI](https://fastapi.tiangolo.com/), and [uvicorn](https://www.uvic
 
 FastAPI fits this better than a full ASP.NET Core app. The portal is a session, a Jamf client, and one page. Request validation, cookie handling, and tests stay in a small Python process. uvicorn is the ASGI server FastAPI runs on, including under Windows. Waitress is a WSGI server, so it would need another adapter.
 
-The same process is the core for every install. [Choose a deployment](#choose-a-deployment) covers the Windows service, the desktop window, and Docker Compose. None of them fork the request handling.
+The same process is the core for every install. [Choose a deployment](#choose-a-deployment) covers the Windows service, the Windows desktop window, the Mac app, and Docker Compose. None of them fork the request handling.
 
 Jamf Pro 11.30 is called with the signed-in technician's token. Settings come from environment variables, from `config.yaml`, or from both. An environment variable overrides the same setting in the file. The file is optional. Neither place holds a password or a Jamf server URL. The technician types the URL on the sign-in page, every time.
 
-Install it as a Windows service behind IIS, as a desktop window on an RDS host, or as a single container. The steps for all three are in [Choose a deployment](#choose-a-deployment).
+Install it as a Windows service behind IIS, as a desktop window on an RDS host, as a Mac app that runs on that Mac only, or as a single container. The steps for all four are in [Choose a deployment](#choose-a-deployment).
 
 ## What a technician can do
 
@@ -141,7 +141,7 @@ Paths inside the file are relative to the file's directory, not the service's wo
 
 | Key | Meaning |
 | --- | --- |
-| `insecure_test_mode` | Lab only. Default false. There is no control for this on the page. When true, an HTTP page and an `http://` Jamf URL are allowed, and every page shows a red Insecure test mode banner. On the Windows desktop app this key lives in the admin-only `%ProgramData%\ipad-tech-portal\config.yaml`. |
+| `insecure_test_mode` | Lab only. Default false. There is no control for this on the page. When true, an HTTP page and an `http://` Jamf URL are allowed, and every page shows a red Insecure test mode banner. On the Windows desktop app this key lives in the admin-only `%ProgramData%\ipad-tech-portal\config.yaml`. On the Mac app the same switch is the boolean `insecure_test_mode` in the managed preference domain `org.ipad-tech-portal`. |
 | `jamf.verify_tls` | Check the Jamf certificate. Leave true outside a lab. |
 | `jamf.timeout_seconds` | Per-request timeout. |
 | `server.host` / `server.port` | Where uvicorn listens. Use `127.0.0.1` and `8741` behind IIS. |
@@ -241,14 +241,14 @@ python -m pytest
 
 ## Choose a deployment
 
-| | Windows service and IIS | Windows desktop app | Docker |
-| --- | --- | --- | --- |
-| Where it runs | One Windows Server, one service | One process per RDS session, published in Horizon | One portal container behind your reverse proxy |
-| Who reaches it | Browsers on the internal network, through IIS | The technician's own window on that session | Browsers through the proxy, which forwards to port 8741 |
-| HTTPS | IIS | The window talks to `127.0.0.1` over HTTP. A per-launch token stops other sessions on the same host from using it. The Jamf URL is still `https://` | The reverse proxy. It must send `X-Forwarded-Proto: https` |
-| Config | `config.yaml` next to the app | `%ProgramData%\ipad-tech-portal\config.yaml`, readable by users and writable by administrators | No required environment variables. The image listens on `0.0.0.0:8741` |
-| Audit log | A file on the server | A UNC path with a cross-process lock, or a local file if that path is down | Bind mount `/opt/dockers/appdata/ipad-tech-portal/logs` at `/app/logs` |
-| Sessions | In memory, one worker | In memory, inside that user's process | In memory, one container |
+| | Windows service and IIS | Windows desktop app | macOS app | Docker |
+| --- | --- | --- | --- | --- |
+| Where it runs | One Windows Server, one service | One process per RDS session, published in Horizon | One process on the technician's Mac | One portal container behind your reverse proxy |
+| Who reaches it | Browsers on the internal network, through IIS | The technician's own window on that session | The technician's own window on that Mac | Browsers through the proxy, which forwards to port 8741 |
+| HTTPS | IIS | The window talks to `127.0.0.1` over HTTP. A per-launch token stops other sessions on the same host from using it. The Jamf URL is still `https://` | The window talks to `127.0.0.1` over HTTP. Other hosts are refused. The Jamf URL is still `https://` | The reverse proxy. It must send `X-Forwarded-Proto: https` |
+| Config | `config.yaml` next to the app | `%ProgramData%\ipad-tech-portal\config.yaml`, readable by users and writable by administrators | No file required. Optional `/Library/Application Support/ipad-tech-portal/config.yaml`. The lab switch is a managed preference | No required environment variables. The image listens on `0.0.0.0:8741` |
+| Audit log | A file on the server | A UNC path with a cross-process lock, or a local file if that path is down | `~/Library/Logs/ipad-tech-portal/`, rotated by size and age on write | Bind mount `/opt/dockers/appdata/ipad-tech-portal/logs` at `/app/logs` |
+| Sessions | In memory, one worker | In memory, inside that user's process | In memory, inside that user's process | In memory, one container |
 
 ### Windows service behind IIS
 
@@ -422,6 +422,58 @@ Publish the installed executable in Horizon Console (Horizon 8):
 
 A technician starts **iPad Tech Portal** from the Horizon Client. The window opens on the sign-in page. Closing it invalidates that session's Jamf token. Each RDS logon is a separate process, port, and token. Publish the executable, and leave the IIS service for a different host if you also want the browser site. Run one or the other on a given host so two copies are not both writing operational confusion; they can share the same audit UNC path.
 
+### macOS app
+
+**Signed and notarized macOS builds are pending Apple Developer account approval.** Until then the release artifacts are unsigned, so Gatekeeper will warn. For testing, right-click the app and choose Open, or allow it in System Settings > Privacy & Security.
+
+Use this when a Jamf org does not want to host a server, a reverse proxy, or a Windows session. The technician installs a Mac app. It runs the same portal in its own window, on that Mac only. Nothing is saved between launches. The technician types the Jamf Pro URL, username, and password every time, and the session stays in memory.
+
+The window is [pywebview](https://pywebview.flowrl.com/), which uses WKWebView on macOS. The package is PyInstaller, the same tool as the Windows build, producing `iPad Tech Portal.app`, then a `.pkg` and a `.dmg`. A separate Swift shell would still have to ship this Python process, so the app bundles the process it already shares with Windows. GitHub's macOS 26 runners are Apple Silicon. A universal binary would need a second Python build, so the download is arm64 for macOS 26.
+
+The app does not need a config file. It binds `127.0.0.1` on a free port and opens `http://127.0.0.1` in the window. That loopback page is the only plain-HTTP exception, because the traffic never leaves the Mac. A request whose Host is anything else is refused, including when `X-Forwarded-Proto` says https. Other machines cannot connect. The Jamf URL still has to be `https://` unless the hidden lab switch is on. Closing the window signs the technician out.
+
+Logs go to `~/Library/Logs/ipad-tech-portal/app.log` and `audit.jsonl`. On each write, a file at 10 MB or from a previous UTC day is renamed, and renamed files older than 90 days are removed. There is no timer. `logging.path` in a config file is ignored. An `audit.path` in that file, or `ITP_AUDIT_PATH`, is honored. Otherwise the audit log is in the same Library folder.
+
+An optional admin file at `/Library/Application Support/ipad-tech-portal/config.yaml` can set the group prefix, TLS verification, and an audit path. Leave it free of passwords and free of a Jamf URL. If `ITP_CONFIG` points at a file, that file has to exist. A `config.yaml` in the working directory is not read.
+
+#### Hidden lab switch
+
+There is no control in the window. The switch is a managed preference, which a Jamf configuration profile can deploy:
+
+- Preference domain: `org.ipad-tech-portal`
+- Key: `insecure_test_mode` (boolean)
+
+`macos/org.ipad-tech-portal.plist.example` has the key set to false. In Jamf Pro, create a computer configuration profile, add a Custom Settings (or Application & Custom Settings) payload for that domain, and set `insecure_test_mode` to true only on lab Macs. When it is true, every page shows a red Insecure test mode banner and an `http://` Jamf URL is accepted. The app looks at `/Library/Managed Preferences`, then the user Managed Preferences, then local preferences. A Jamf profile lands in Managed Preferences and wins over a file a technician could edit. `ITP_INSECURE_TEST_MODE` still overrides the preference.
+
+#### Install
+
+The GitHub Actions workflow `.github/workflows/macos.yml` builds on `macos-26` for pull requests, for pushes to `main` that touch the app, and when a release is published. It uploads `dist/ipad-tech-portal-mac.pkg` and `dist/ipad-tech-portal-mac.dmg`. A published release gets those two files attached.
+
+A technician can open the disk image and drag **iPad Tech Portal** to Applications. For a fleet, upload the `.pkg` to Jamf and scope it. It installs `/Applications/iPad Tech Portal.app`. Add the configuration profile above only where the lab switch should be on.
+
+Signed and notarized builds need these repository secrets. When `MACOS_CERTIFICATE_APPLICATION_P12` is absent, the workflow still uploads an unsigned pkg and dmg and does not fail. That is the current build, while Apple Developer account approval is pending. Add the secrets when you want a release that opens without the Gatekeeper warning.
+
+| Secret | Contents |
+| --- | --- |
+| `MACOS_CERTIFICATE_APPLICATION_P12` | Base64 of the Developer ID Application `.p12` |
+| `MACOS_CERTIFICATE_APPLICATION_PASSWORD` | Password for that `.p12` |
+| `MACOS_CERTIFICATE_INSTALLER_P12` | Base64 of the Developer ID Installer `.p12`. If this one is absent, the app and dmg are signed and the pkg is left unsigned |
+| `MACOS_CERTIFICATE_INSTALLER_PASSWORD` | Password for the installer `.p12` |
+| `MACOS_NOTARY_KEY` | Base64 of the App Store Connect API key (`.p8`) |
+| `MACOS_NOTARY_KEY_ID` | Key ID for that API key |
+| `MACOS_NOTARY_ISSUER_ID` | Issuer ID for that API key |
+
+Notarization runs only when the app was signed and all three notary secrets are set. If the notary secrets are only partly set, the build fails. If notarization is attempted and Apple rejects it, the build fails.
+
+On a Mac, from the repository root:
+
+```bash
+python3 -m pip install -r requirements.txt -r requirements-desktop.txt
+bash macos/build.sh
+```
+
+`macos/build.sh` writes `dist/ipad-tech-portal-mac.pkg` and `dist/ipad-tech-portal-mac.dmg`. Export the secret variables in the environment before that command when you want a signed build. This Linux workspace cannot produce the Mac app.
+
 ### Deploy with Dockhand / any compose manager
 
 Paste one Compose file. The manager pulls `ghcr.io/marlonso189/ipad-tech-portal`. It does not check out this repository, it does not build, and it does not need a config file or a Jamf URL. The same text is stored at `deploy/docker-compose.yml`.
@@ -544,13 +596,13 @@ Keep a single portal container. A second replica would have its own memory and w
 
 Each change is one JSON object per line: `timestamp`, `username`, `jamfHost`, `deviceId`, `serialNumber`, `action`, `before`, `after`, `result`, `detail`. `jamfHost` is the Jamf server hostname for that sign-in, with the port when it is not the default. `result` is `success`, `denied`, or `error`. The active file is append-only. Rotation renames it; files older than `audit.retention_days` are removed. Passwords, tokens, and the Jamf URL's userinfo are not written. The Jamf address itself is not written anywhere except this host field in the log and the application log line for a successful sign-in.
 
-Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rotate or append, so several desktop sessions can share one UNC file. On Windows the lock is a byte-range lock. On Linux it is `flock`. Retention still deletes rotated files older than `audit.retention_days` while that lock is held. The desktop app is the one that falls back to `%LOCALAPPDATA%\ipad-tech-portal\logs\audit.jsonl` when the configured path cannot be opened. The service and the container have no fallback: a bad path fails startup, which is what you want from a host you administer.
+Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rotate or append, so several desktop sessions can share one UNC file. On Windows the lock is a byte-range lock. On Linux it is `flock`. Retention still deletes rotated files older than `audit.retention_days` while that lock is held. The Windows desktop app falls back to `%LOCALAPPDATA%\ipad-tech-portal\logs\audit.jsonl` when the configured path cannot be opened. The Mac app falls back to `~/Library/Logs/ipad-tech-portal/audit.jsonl`. The service and the container have no fallback: a bad path fails startup, which is what you want from a host you administer.
 
 ## Limitations
 
 - Sessions are in memory. The Jamf token and the Jamf server address live only there. Logout, the idle timeout (15 minutes by default), and a process restart drop both. Nothing about the sign-in is written to disk except the logs. Run one process, not several workers, and not a web farm.
 - The sign-in page asks for the Jamf server URL every time. A query string, a bookmark, or `ITP_JAMF_URL` cannot fill it in. Only `https://` URLs are accepted, with the path and a trailing slash removed, unless insecure test mode is on.
-- The web and Docker sign-in is refused unless the page is HTTPS. `X-Forwarded-Proto: https` from the reverse proxy counts. The Windows desktop window is the exception, because it is HTTP on `127.0.0.1`. Its Jamf URL still has to be `https://`.
+- The web and Docker sign-in is refused unless the page is HTTPS. `X-Forwarded-Proto: https` from the reverse proxy counts. The Windows desktop window and the Mac app are the exception, and only when the Host is `127.0.0.1` or `localhost`. A non-loopback Host is refused even if `X-Forwarded-Proto` says https. The Jamf URL still has to be `https://`.
 - Idle timeout is enforced on the next request. Abandoned sessions are dropped when any request touches the store. There is no timer thread.
 - Search is an exact serial or an exact asset tag. It is not a substring search, which keeps a 2,000-device lookup to one Jamf query. Duplicate asset tags return a picker.
 - Only iPad inventory records are shown. iPhones and other mobile devices are refused.
@@ -563,7 +615,7 @@ Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rot
 - Erase Device does not send a macOS PIN or a Return to Service profile. Lost Mode, Restart, and Erase still require whatever Apple and Jamf require of that device (supervised, managed, and a management id).
 - Privileges are read at login. A privilege removed in Jamf afterward still fails the live call with a permission message. The hidden buttons update at the next sign-in.
 - `cookie_secure: false` is for the local HTTP mock and for the desktop window, which loads `http://127.0.0.1`. The IIS site and the Docker site use HTTPS and `cookie_secure: true`. The desktop process forces the flag off even if the file says true. Insecure test mode also leaves the Secure flag off when the page itself is HTTP, so the lab session can stick. The cookie value is still only the opaque session id.
-- Insecure test mode is off unless `ITP_INSECURE_TEST_MODE=true` (Docker) or `insecure_test_mode: true` in the admin-only Windows config. The page cannot turn it on. When it is on, a red Insecure test mode banner is on every page.
+- Insecure test mode is off unless `ITP_INSECURE_TEST_MODE=true` (Docker), `insecure_test_mode: true` in the admin-only Windows config, or the Mac managed preference `insecure_test_mode` in domain `org.ipad-tech-portal`. The page cannot turn it on. When it is on, a red Insecure test mode banner is on every page.
 - The mock's usernames and passwords are fake and exist only in `mock_jamf`. Point a production config at your Jamf server and have technicians use their own accounts.
 - The desktop launch token lives in process memory and in an HttpOnly cookie. It is not written to `config.yaml`. uvicorn access logs are off for that process so the token in the first URL is not written to disk.
 - Other RDS sessions can open TCP to `127.0.0.1` on this host. Requests without this process's launch token get 404, including `/api/health`. The process does not listen on the LAN.
@@ -573,9 +625,10 @@ Writers take an exclusive lock on a sibling file (`<name>.lock`) before they rot
 - The prebuilt image is published from GitHub (`github.com/Marlonso189/ipad-tech-portal`), not from Cursor Origin. Until that push exists, `deploy/docker-compose.yml` has nothing to pull. `.github/workflows/publish-image.yml` and `scripts/publish-image.sh` are the two ways to create it.
 - The Windows executable and the Inno Setup installer are built on Windows. The workflow is `.github/workflows/desktop.yml`. A Linux checkout can run the tests and the container build, and it cannot produce `ipad-tech-portal.exe`. That desktop workflow also runs on GitHub, after the repository is there.
 - The desktop window needs the WebView2 Runtime on the RDS host.
+- The Mac app is Apple Silicon, macOS 26, and is built by `.github/workflows/macos.yml`. It listens on `127.0.0.1` only. Logs under `~/Library/Logs/ipad-tech-portal` rotate on write. Unsigned pkg and dmg artifacts are still produced when the Developer ID secrets are not in the repository.
 
 ## License
 
 This program is free software under the GNU Affero General Public License, version 3 or any later version (AGPL-3.0-or-later). Copyright (C) 2026 Marvin Alonso. The full text is in `LICENSE`.
 
-You may use, study, change, and share this portal. If you give someone a copy, the same license has to travel with it, including your changes. If you run a modified version and other people use it over a network, you must offer them the source code of that version. That network rule is section 13 of the AGPL. After sign-in, About in the header opens a small panel with the app name, the version, "Licensed under AGPL-3.0-or-later", and a link to https://github.com/Marlonso189/ipad-tech-portal, which is the source for this copy. The sign-in page does not show that link, and it is not in the footer. The Windows desktop window uses the same page. There is no warranty.
+You may use, study, change, and share this portal. If you give someone a copy, the same license has to travel with it, including your changes. If you run a modified version and other people use it over a network, you must offer them the source code of that version. That network rule is section 13 of the AGPL. After sign-in, About in the header opens a small panel with the app name, the version, "Licensed under AGPL-3.0-or-later", and a link to https://github.com/Marlonso189/ipad-tech-portal, which is the source for this copy. The sign-in page does not show that link, and it is not in the footer. The Windows desktop window and the Mac app use the same page. There is no warranty.
