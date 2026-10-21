@@ -22,6 +22,7 @@ from app.jamf_client import JamfClient
 from app.jamf_url import JamfUrlError, normalize_jamf_url
 from app.operations import TIMED_OUT, AppError, Portal
 from app.privileges import feature_map
+from app.log_rotation import RotatingSizeAgeHandler
 from app.redact import redact_text
 from app.sessions import Session, SessionStore
 
@@ -424,13 +425,25 @@ def _checked_jamf_url(raw: str, config: Config) -> tuple[str, str]:
 
 def _page_https_required(request: Request) -> bool:
     config: Config = request.app.state.config
-    if config.insecure_test_mode or request.app.state.loopback_exempt:
+    if config.insecure_test_mode:
+        return False
+    # The desktop and Mac windows are HTTP only on the loopback host. A
+    # loopback exemption does not make every Host exempt: plain HTTP to any
+    # other host is still refused.
+    if request.app.state.loopback_exempt and _host_ok(request):
         return False
     return True
 
 
 def _https_blocked(request: Request) -> bool:
-    return _page_https_required(request) and not _page_is_https(request)
+    if not _page_https_required(request):
+        return False
+    config: Config = request.app.state.config
+    # This process is not a reverse proxy. When it is the loopback window,
+    # X-Forwarded-Proto must not turn a non-loopback HTTP request into HTTPS.
+    if request.app.state.loopback_exempt and not config.insecure_test_mode:
+        return request.url.scheme != "https"
+    return not _page_is_https(request)
 
 
 def _page_is_https(request: Request) -> bool:
@@ -466,7 +479,14 @@ def _setup_logging(config: Config) -> None:
     logger = logging.getLogger("ipad")
     logger.setLevel(config.log_level)
     logger.handlers.clear()
-    handler = logging.FileHandler(config.log_path, encoding="utf-8")
+    if config.log_max_bytes > 0:
+        handler: logging.Handler = RotatingSizeAgeHandler(
+            config.log_path,
+            max_bytes=config.log_max_bytes,
+            retention_days=config.log_retention_days,
+        )
+    else:
+        handler = logging.FileHandler(config.log_path, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     handler.addFilter(_RedactFilter())
     logger.addHandler(handler)

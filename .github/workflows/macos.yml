@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: macOS app build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "macos/**"
+      - "requirements.txt"
+      - "requirements-desktop.txt"
+      - ".github/workflows/macos.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "desktop/**"
+      - "macos/**"
+      - "requirements.txt"
+      - "requirements-desktop.txt"
+      - ".github/workflows/macos.yml"
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+          python3 -m pytest
+
+      - name: Build the app, package, and disk image
+        env:
+          MACOS_CERTIFICATE_APPLICATION_P12: ${{ secrets.MACOS_CERTIFICATE_APPLICATION_P12 }}
+          MACOS_CERTIFICATE_APPLICATION_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_APPLICATION_PASSWORD }}
+          MACOS_CERTIFICATE_INSTALLER_P12: ${{ secrets.MACOS_CERTIFICATE_INSTALLER_P12 }}
+          MACOS_CERTIFICATE_INSTALLER_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_INSTALLER_PASSWORD }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: bash macos/build.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipad-tech-portal-macos
+          path: |
+            dist/ipad-tech-portal-mac.pkg
+            dist/ipad-tech-portal-mac.dmg
+          if-no-files-found: error
+
+      - name: Attach the package and disk image to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ipad-tech-portal-mac.pkg
+            dist/ipad-tech-portal-mac.dmg
